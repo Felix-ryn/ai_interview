@@ -1,8 +1,7 @@
+# app/models/database_models.py
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
-
-Base = declarative_base()
+from app.databse import Base  # Base dari database.py
 
 class MLQuestion(Base):
     __tablename__ = "ml_question"
@@ -14,3 +13,5 @@ class MLQuestion(Base):
 
     def __repr__(self):
         return f"<MLQuestion(id={self.id}, user_id={self.user_id}, question_ml={self.question_ml[:30]}...)>"
+
+# Tambahkan juga model lain seperti AnswerUser, MainQuestion jika perlu

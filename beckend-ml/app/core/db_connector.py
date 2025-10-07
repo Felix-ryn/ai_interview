@@ -1,4 +1,3 @@
-# app/core/db_connector.py
 import mysql.connector
 from datetime import datetime
 import os
@@ -16,10 +15,6 @@ def _get_conn():
     return mysql.connector.connect(**DB_CONFIG)
 
 def get_base_questions_by_names(role_name: str, level_name: str, limit: int = 2):
-    """
-    Ambil 2 pertanyaan dasar (main_question) berdasarkan nama role dan level.
-    Return list of dicts: [{'id': ..., 'question': ...}, ...]
-    """
     conn = _get_conn()
     cursor = conn.cursor(dictionary=True)
     q = """
@@ -46,33 +41,18 @@ def get_main_question_text_by_id(mq_id: int):
     conn.close()
     return row[0] if row else None
 
-def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: str,
-                            score_overall: int = 0, score_relevance: int = 0, score_clarity: int = 0,
-                            score_structure: int = 0, score_confidence: int = 0, score_conciseness: int = 0,
-                            nlp_star_detected: int = 0, nlp_filler_ratio: float = 0.0,
-                            feedback_narrative: str = None) -> int:
-    """
-    Simpan jawaban user untuk main_question (kolom main_question_id terisi).
-    Karena schema mengharuskan skor non-null, isi default 0 (kamu bisa update kemudian).
-    """
+def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: str) -> int:
     conn = _get_conn()
     cursor = conn.cursor()
     q = """
     INSERT INTO answer_user (
         user_id, main_question_id, ml_question_id, answer_text,
         score_overall, score_relevance, score_clarity, score_structure,
-        score_confidence, score_conciseness, nlp_star_detected, nlp_filler_ratio,
-        feedback_narrative, created_at
-    ) VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        score_confidence, score_conciseness, created_at
+    ) VALUES (%s, %s, NULL, %s, 0,0,0,0,0,0, %s)
     """
     now = datetime.now()
-    params = (
-        user_id, main_question_id, answer_text,
-        score_overall, score_relevance, score_clarity, score_structure,
-        score_confidence, score_conciseness, nlp_star_detected, nlp_filler_ratio,
-        feedback_narrative, now
-    )
-    cursor.execute(q, params)
+    cursor.execute(q, (user_id, main_question_id, answer_text, now))
     conn.commit()
     last_id = cursor.lastrowid
     cursor.close()
@@ -80,15 +60,9 @@ def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: st
     return last_id
 
 def insert_ml_question(user_id: int, question_text: str) -> int:
-    """
-    Simpan pertanyaan yang dihasilkan AI ke tabel ml_question.
-    """
     conn = _get_conn()
     cursor = conn.cursor()
-    query = """
-    INSERT INTO ml_question (user_id, question_ml, created_at)
-    VALUES (%s, %s, %s)
-    """
+    query = "INSERT INTO ml_question (user_id, question_ml, created_at) VALUES (%s, %s, %s)"
     now = datetime.now()
     cursor.execute(query, (user_id, question_text, now))
     conn.commit()
@@ -97,34 +71,29 @@ def insert_ml_question(user_id: int, question_text: str) -> int:
     conn.close()
     return last_id
 
-def insert_user_answer_ml(user_id: int, ml_question_id: int, answer_text: str,
-                          score_overall: int = 0, score_relevance: int = 0, score_clarity: int = 0,
-                          score_structure: int = 0, score_confidence: int = 0, score_conciseness: int = 0,
-                          nlp_star_detected: int = 0, nlp_filler_ratio: float = 0.0,
-                          feedback_narrative: str = None) -> int:
-    """
-    Simpan jawaban untuk pertanyaan ML (ml_question_id terisi).
-    """
+def insert_user_answer_ml(user_id: int, ml_question_id: int, answer_text: str) -> int:
     conn = _get_conn()
     cursor = conn.cursor()
     q = """
     INSERT INTO answer_user (
         user_id, main_question_id, ml_question_id, answer_text,
         score_overall, score_relevance, score_clarity, score_structure,
-        score_confidence, score_conciseness, nlp_star_detected, nlp_filler_ratio,
-        feedback_narrative, created_at
-    ) VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        score_confidence, score_conciseness, created_at
+    ) VALUES (%s, NULL, %s, %s, 0,0,0,0,0,0, %s)
     """
     now = datetime.now()
-    params = (
-        user_id, ml_question_id, answer_text,
-        score_overall, score_relevance, score_clarity, score_structure,
-        score_confidence, score_conciseness, nlp_star_detected, nlp_filler_ratio,
-        feedback_narrative, now
-    )
-    cursor.execute(q, params)
+    cursor.execute(q, (user_id, ml_question_id, answer_text, now))
     conn.commit()
     last_id = cursor.lastrowid
     cursor.close()
     conn.close()
     return last_id
+
+def check_ml_question_exists(ml_question_id: int) -> bool:
+    conn = _get_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM ml_question WHERE id = %s", (ml_question_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row is not None
