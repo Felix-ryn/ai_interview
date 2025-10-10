@@ -6,6 +6,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import traceback
 
+from pydantic import BaseModel
+# --- ASUMSI IMPORT MODEL PYDANTIC DARI app.models.schemas ---
+# Saya mendefinisikan model ini secara eksplisit di sini agar endpoint baru berfungsi,
+# tapi pastikan Anda mengimpornya dengan benar dari app.models.schemas jika itu adalah struktur Anda.
+
+# Model yang dibutuhkan oleh endpoint baru: /api/sessions/start
+class SessionStartRequest(BaseModel):
+    role: str
+    level: str
+
+class SessionStartResponse(BaseModel):
+    session_id: str
+    first_question: str
+    first_question_id: int
+# -----------------------------------------------------------------
+
 from app.models.schemas import (
     BaseQuestionOut, SubmitAnswersRequest, SubmitAnswersResponse
 )
@@ -21,13 +37,54 @@ from app.core.db_connector import (
 
 app = FastAPI(title="AI Interview Backend")
 
+# --- PERBAIKAN CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    # Mengizinkan port 5173 (Vite Frontend)
+    allow_origins=[
+        "http://localhost:5173", 
+        "http://127.0.0.1:5173",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# --- AKHIR PERBAIKAN CORS ---
+
+# --- ENDPOINT BARU: /api/sessions/start ---
+@app.post("/api/sessions/start", response_model=SessionStartResponse)
+def start_session(payload: SessionStartRequest): 
+    try:
+        # 1. Ambil 1 pertanyaan dasar
+        qs = get_base_questions_by_names(payload.role, payload.level, limit=1)
+        
+        # 2. Jika tidak ada, lempar 404. 
+        if not qs:
+            raise HTTPException(status_code=404, detail="Tidak ada pertanyaan dasar untuk role/level ini.")
+
+        first_q = qs[0]
+        
+        # 3. Logika pembuatan Session ID sederhana
+        temp_session_id = f"sess_{first_q['id']}_{payload.role}_{payload.level}"
+
+        return SessionStartResponse(
+            session_id=temp_session_id,
+            first_question=first_q['question'],
+            first_question_id=first_q['id']
+        )
+        
+    except HTTPException:
+        # Jika error yang terjadi adalah HTTPException (misalnya 404 yang kita lempar),
+        # biarkan FastAPI menanganinya dan mengembalikannya ke klien.
+        raise
+    except Exception as e:
+        # Jika terjadi error lain (misalnya koneksi DB putus), kembalikan 500.
+        print("Unexpected non-HTTP error in /api/sessions/start:", e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Terjadi kesalahan server tak terduga saat memulai sesi.")
+# --- AKHIR ENDPOINT BARU ---
+
 
 @app.get("/api/v1/questions/base", response_model=List[BaseQuestionOut])
 def get_base_questions(role: str = Query(...), level: str = Query(...)):

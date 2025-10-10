@@ -1,3 +1,13 @@
+/* src/index.css */
+
+/* 1. DIREKTIF TAILWIND CSS WAJIB */
+/* Letakkan ini di bagian paling atas agar Tailwind dapat menginjeksi base styles, components, dan utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. BOILERPLATE CSS DARI VITE (DIBAWAH DIREKTIF TAILWIND) */
+/* Gaya default yang Anda miliki dari template Vite */
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
