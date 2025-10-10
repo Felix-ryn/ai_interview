@@ -1,20 +1,32 @@
 import mysql.connector
 from datetime import datetime
-import os
+# os tidak lagi diperlukan di sini karena kita tidak menggunakan os.environ.get
 
-DB_CONFIG = {
-    'user': os.environ.get("DB_USER"),
-    'password': os.environ.get("DB_PASSWORD"),
-    'host': os.environ.get("DB_HOST"),
-    'database': os.environ.get("DB_NAME"),
-    'port': int(os.environ.get("DB_PORT", 3306)),
-    'auth_plugin': 'mysql_native_password'
-}
+# ====================================================================
+# FIX KONEKSI: Menggunakan konfigurasi Laragon 3307 yang sudah diverifikasi
+# ====================================================================
 
 def _get_conn():
-    return mysql.connector.connect(**DB_CONFIG)
+    """Membuat koneksi ke database MySQL."""
+    return mysql.connector.connect(
+        user='root', 
+        password='', 
+        host='127.0.0.1', 
+        database='tm_db', 
+        port=3307, # PORT WAJIB 3307
+        auth_plugin='mysql_native_password'
+    )
+
 
 def get_base_questions_by_names(role_name: str, level_name: str, limit: int = 2):
+    """Mengambil pertanyaan dasar berdasarkan role dan level (case-insensitive)."""
+    # Fix: Normalisasi input ke huruf kecil di Python
+    normalized_role = role_name.lower()
+    normalized_level = level_name.lower()
+    
+    # === DEBUG PRINT ===
+    print(f"DEBUG DB: Mencari Role: '{normalized_role}', Level: '{normalized_level}'")
+    
     conn = _get_conn()
     cursor = conn.cursor(dictionary=True)
     q = """
@@ -22,12 +34,17 @@ def get_base_questions_by_names(role_name: str, level_name: str, limit: int = 2)
     FROM main_question mq
     JOIN ref_role rr ON mq.ref_role_id = rr.id
     JOIN ref_level rl ON mq.ref_level_id = rl.id
-    WHERE rr.role_name = %s AND rl.level_name = %s
+    -- Fix: Menggunakan fungsi MySQL LOWER() pada kolom DB untuk case-insensitive
+    WHERE LOWER(rr.role_name) = %s AND LOWER(rl.level_name) = %s 
     ORDER BY mq.id
     LIMIT %s
     """
-    cursor.execute(q, (role_name, level_name, limit))
+    cursor.execute(q, (normalized_role, normalized_level, limit))
     rows = cursor.fetchall()
+    
+    # === DEBUG PRINT ===
+    print(f"DEBUG DB: Rows ditemukan: {len(rows)}") 
+
     cursor.close()
     conn.close()
     return rows

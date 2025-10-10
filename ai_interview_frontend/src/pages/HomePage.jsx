@@ -4,8 +4,8 @@ import { useInterviewSession } from '../hooks/useInterviewSession';
 import Dropdown from '../components/common/Dropdown';
 import Button from '../components/common/Button'; 
 
-const ROLES = ['Data Analyst', 'Data Scientist', 'ML Engineer']; // Contoh
-const LEVELS = ['Entry Level', 'Mid Level', 'Senior']; // Contoh
+const ROLES = ['Android Developer', 'Backend Developer', 'Data Analyst','Data Engineer','Data Scientist','DevOps', 'Frontend Developer', 'Fullstack Developer']; // Contoh
+const LEVELS = ['Junior', 'Mid Level', 'Senior']; // Contoh
 
 const HomePage = () => {
   const [name, setName] = useState('');

@@ -7,11 +7,7 @@ from typing import List
 import traceback
 
 from pydantic import BaseModel
-# --- ASUMSI IMPORT MODEL PYDANTIC DARI app.models.schemas ---
-# Saya mendefinisikan model ini secara eksplisit di sini agar endpoint baru berfungsi,
-# tapi pastikan Anda mengimpornya dengan benar dari app.models.schemas jika itu adalah struktur Anda.
-
-# Model yang dibutuhkan oleh endpoint baru: /api/sessions/start
+# --- Model yang dibutuhkan oleh endpoint baru: /api/sessions/start ---
 class SessionStartRequest(BaseModel):
     role: str
     level: str
@@ -52,15 +48,16 @@ app.add_middleware(
 )
 # --- AKHIR PERBAIKAN CORS ---
 
-# --- ENDPOINT BARU: /api/sessions/start ---
+# --- ENDPOINT BARU: /api/sessions/start (Penyebab 404 Anda) ---
 @app.post("/api/sessions/start", response_model=SessionStartResponse)
 def start_session(payload: SessionStartRequest): 
     try:
-        # 1. Ambil 1 pertanyaan dasar
+        # 1. Ambil 1 pertanyaan dasar (Menggunakan fungsi db_connector yang sudah diperbaiki)
         qs = get_base_questions_by_names(payload.role, payload.level, limit=1)
         
         # 2. Jika tidak ada, lempar 404. 
         if not qs:
+            # Jika DB mengembalikan kosong, ini yang membuat 404 Not Found
             raise HTTPException(status_code=404, detail="Tidak ada pertanyaan dasar untuk role/level ini.")
 
         first_q = qs[0]
@@ -75,11 +72,10 @@ def start_session(payload: SessionStartRequest):
         )
         
     except HTTPException:
-        # Jika error yang terjadi adalah HTTPException (misalnya 404 yang kita lempar),
-        # biarkan FastAPI menanganinya dan mengembalikannya ke klien.
+        # Jika error adalah 404 kita sendiri
         raise
     except Exception as e:
-        # Jika terjadi error lain (misalnya koneksi DB putus), kembalikan 500.
+        # Jika ada error koneksi DB, ia akan masuk ke sini dan mencetak error (500)
         print("Unexpected non-HTTP error in /api/sessions/start:", e)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Terjadi kesalahan server tak terduga saat memulai sesi.")

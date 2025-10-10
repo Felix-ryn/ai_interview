@@ -8,8 +8,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 DB_USER = "root"       # username MySQL
 DB_PASSWORD = ""       # password MySQL (kosong biasanya default Laragon)
 DB_HOST = "127.0.0.1"
-DB_PORT = "3306"
-DB_NAME = "your_db_name"  # ganti sesuai nama database kamu
+DB_PORT = "3307"
+DB_NAME = "tm_db"  # ganti sesuai nama database kamu
 
 SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
