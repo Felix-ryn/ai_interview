@@ -1,6 +1,19 @@
 # app/models/schemas.py
+
 from pydantic import BaseModel
 from typing import List, Optional
+
+# --- Model Baru untuk Session Start Response ---
+class QuestionDetail(BaseModel):
+    id: int
+    question: str
+
+class SessionStartResponse(BaseModel):
+    session_id: str
+    # Mengganti first_question: str dan first_question_id: int
+    base_questions: List[QuestionDetail] # Mengirim List dari 2 pertanyaan
+# ---------------------------------------------
+
 
 class AnswerItem(BaseModel):
     main_question_id: int
@@ -26,7 +39,7 @@ class SubmitAnswersRequest(BaseModel):
 class SubmitAnswersResponse(BaseModel):
     generated_questions: List[str]
     generated_questions_ids: Optional[List[int]] = []
-    feedback: Optional[List[FeedbackItem]] = []  # 🟢 tambahkan ini
+    feedback: Optional[List[FeedbackItem]] = [] 
     message: str
 
 class BaseQuestionOut(BaseModel):
