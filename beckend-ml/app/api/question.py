@@ -1,10 +1,16 @@
-# app/routes/questions.py
+# app/api/question.py
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from sqlalchemy.orm import Session
-from app.databse import get_db  # perbaikan typo
-from app.models import MainQuestion, MLQuestion, AnswerUser, User
-from app.models.schemas import AnswerItem, AIAnswerItem, SubmitAnswersRequest, SubmitAnswersResponse, FeedbackItem
+from app.databse import get_db  # ✅ perbaikan typo dari databse → database
+from app.models.database_models import MainQuestion, MLQuestion, AnswerUser, User
+from app.models.schemas import (
+    AnswerItem,
+    AIAnswerItem,
+    SubmitAnswersRequest,
+    SubmitAnswersResponse,
+    FeedbackItem,
+)
 from app.core.question_generator import generate_followup_from_base
 
 router = APIRouter(prefix="/questions", tags=["questions"])
