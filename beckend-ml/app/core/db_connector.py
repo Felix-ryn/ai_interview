@@ -3,6 +3,64 @@ from datetime import datetime
 # 💡 BARU: Import IntegrityError dan DatabaseError untuk penanganan rollback
 from mysql.connector.errors import IntegrityError, DatabaseError 
 
+
+# ====================================================================
+# FUNGSI BARU UNTUK REF_ROLE DAN REF_LEVEL
+# ====================================================================
+
+def get_all_roles():
+    """Mengambil semua data role dari ref_role."""
+    conn = _get_conn()
+    cursor = conn.cursor(dictionary=True)
+    q = "SELECT id, role_name FROM ref_role ORDER BY role_name"
+    try:
+        cursor.execute(q)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_all_levels():
+    """Mengambil semua data level dari ref_level."""
+    conn = _get_conn()
+    cursor = conn.cursor(dictionary=True)
+    q = "SELECT id, level_name FROM ref_level ORDER BY id"
+    try:
+        cursor.execute(q)
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+# ====================================================================
+# FUNGSI BARU UNTUK REGISTRASI USER
+# ====================================================================
+
+def create_user(name: str, ref_role_id: int, ref_level_id: int) -> int:
+    """Menyimpan user baru ke tabel user dan mengembalikan ID-nya."""
+    conn = _get_conn()
+    cursor = conn.cursor()
+    last_id = None
+    q = """
+    INSERT INTO user (name, ref_role_id, ref_level_id, created_at) 
+    VALUES (%s, %s, %s, %s)
+    """
+    now = datetime.now()
+    try:
+        # Periksa apakah ID role/level ada (optional, tapi baik untuk validasi)
+        # Asumsikan validasi role/level ID sudah dilakukan di API atau Pydantic.
+        
+        cursor.execute(q, (name, ref_role_id, ref_level_id, now))
+        conn.commit()
+        last_id = cursor.lastrowid
+        return last_id
+    except (IntegrityError, DatabaseError) as e:
+        conn.rollback() 
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
+        
 # ====================================================================
 # FIX KONEKSI: Menggunakan konfigurasi Laragon 3307 yang sudah diverifikasi
 # ====================================================================

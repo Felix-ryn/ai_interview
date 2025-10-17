@@ -1,5 +1,6 @@
 // src/pages/InterviewPage.jsx
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react'; // Menambahkan useRef
 import { useParams, useNavigate } from 'react-router-dom';
 import { getReport, submitAnswer } from '../services/api';
 import ProgressIndicator from '../components/common/ProgressIndicator';
@@ -12,14 +13,16 @@ const InterviewPage = () => {
     const { sessionId } = useParams();
     const navigate = useNavigate();
     const [questionNumber, setQuestionNumber] = useState(1);
-    // State untuk menyimpan SEMUA pertanyaan dasar (Q1 dan Q2) dari DB
     const [allBaseQuestions, setAllBaseQuestions] = useState([]);
-    // ID Pertanyaan saat ini (digunakan saat submit)
     const [currentQuestionId, setCurrentQuestionId] = useState(null);
     const [currentQuestion, setCurrentQuestion] = useState("Memuat pertanyaan pertama...");
     const [answer, setAnswer] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    // 💡 KRITIS: Gunakan useRef untuk menyimpan USER ID
+    const userIdRef = useRef(null);
+    const roleRef = useRef(""); // Simpan Role untuk judul
 
     useEffect(() => {
         // Logika ini membaca data yang disimpan oleh useInterviewSession.js
@@ -28,8 +31,18 @@ const InterviewPage = () => {
         if (interviewDataString) {
             try {
                 const data = JSON.parse(interviewDataString);
-                // Ambil array 2 pertanyaan dari kunci 'base_questions'
-                const allQs = data.base_questions; 
+
+                // 💡 AMBIL USER ID DAN ROLE DARI LOCALSTORAGE
+                userIdRef.current = data.userId; // Simpan user ID di ref
+                roleRef.current = data.role;     // Simpan Role di ref
+
+                // Validasi data
+                if (!data.userId) {
+                    setError("Data sesi tidak lengkap (User ID hilang). Silakan mulai ulang.");
+                    return;
+                }
+
+                const allQs = data.base_questions;
 
                 if (allQs && allQs.length >= 1) {
                     setAllBaseQuestions(allQs);
@@ -55,47 +68,58 @@ const InterviewPage = () => {
 
     const handleSubmit = async () => {
         if (!answer.trim()) return setError("Jawaban tidak boleh kosong.");
-        
-        if (!currentQuestionId) {
-             setError("Kesalahan sesi: ID pertanyaan tidak ditemukan. Coba tunggu pemuatan atau mulai sesi lagi.");
-             return;
+
+        if (!currentQuestionId || !userIdRef.current) { // 💡 VALIDASI USER ID
+            setError("Kesalahan sesi: ID Pertanyaan atau User ID hilang. Coba mulai sesi lagi.");
+            return;
         }
 
         setLoading(true);
         setError(null);
 
         try {
-            // 1. Kirim jawaban saat ini (Q1, Q2, atau Qn) ke backend
-            const data = await submitAnswer(sessionId, answer, currentQuestionId);
+            // 1. Kirim jawaban saat ini
+            // 💡 PERUBAHAN KRITIS: Kirim userIdRef.current
+            const data = await submitAnswer(
+                userIdRef.current, // 👈 KIRIM USER ID YANG BENAR
+                sessionId,
+                answer,
+                currentQuestionId
+            );
 
-            const nextIndex = questionNumber; 
-            
+            const nextIndex = questionNumber;
+
             // Cek apakah ada pertanyaan berikutnya di array lokal (untuk Q2)
-            if (nextIndex < allBaseQuestions.length) { 
+            if (nextIndex < allBaseQuestions.length) {
                 // KASUS 1: Pindah dari Q1 ke Q2 (Mengambil dari array lokal DB)
-                
+
                 const nextQ = allBaseQuestions[nextIndex];
-                
+
                 setQuestionNumber(prev => prev + 1);
-                setCurrentQuestion(nextQ.question); 
-                setCurrentQuestionId(nextQ.id); 
+                setCurrentQuestion(nextQ.question);
+                setCurrentQuestionId(nextQ.id);
                 setAnswer('');
-                
+
             } else if (questionNumber < MAX_QUESTIONS) {
                 // KASUS 2: Pindah dari Q2 ke Q3 (Mengambil dari response AI)
                 // Backend merespons generated_questions (teks) dan generated_questions_ids (ID)
-                
+
                 const nextQuestionText = data.generated_questions && data.generated_questions[0];
                 const nextQuestionId = data.generated_questions_ids && data.generated_questions_ids[0];
 
-                if (nextQuestionText && nextQuestionId) {
+                // 💡 Fallback jika AI gagal (karena Quota 429)
+                const fallbackText = "Pertanyaan lanjutan AI gagal dimuat. Sesi dilanjutkan dengan pertanyaan fallback."
+                const questionToDisplay = nextQuestionText || fallbackText;
+                const idToUse = nextQuestionId || currentQuestionId + 1; // ID sementara jika ID AI hilang
+
+                if (nextQuestionText || nextQuestionId) {
                     setQuestionNumber(prev => prev + 1);
-                    setCurrentQuestion(nextQuestionText); 
-                    setCurrentQuestionId(nextQuestionId); 
+                    setCurrentQuestion(questionToDisplay);
+                    setCurrentQuestionId(idToUse); // Gunakan ID yang dikembalikan AI
                     setAnswer('');
                 } else {
                     // Jika LLM gagal memberikan pertanyaan baru, kita tunjukkan error
-                    setError("Gagal mendapatkan pertanyaan lanjutan dari AI.");
+                    setError(fallbackText + " Silakan coba klik Kirim lagi.");
                 }
             } else {
                 // KASUS 3: Sesi Selesai (Menjawab Q5)
@@ -115,7 +139,9 @@ const InterviewPage = () => {
             <ProgressIndicator current={questionNumber} total={MAX_QUESTIONS} />
 
             <div className="max-w-4xl mx-auto mt-8">
-                <h2 className="text-xl font-semibold text-gray-600 mb-4">Wawancara: Data Analyst</h2>
+                <h2 className="text-xl font-semibold text-gray-600 mb-4">
+                    Wawancara: {roleRef.current || 'Memuat...'}
+                </h2>
                 <QuestionCard
                     questionNumber={questionNumber}
                     questionText={currentQuestion}

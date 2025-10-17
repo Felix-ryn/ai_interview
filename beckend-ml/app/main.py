@@ -16,21 +16,26 @@ import traceback
 
 # 💡 Import error handling untuk MySQL
 from mysql.connector.errors import IntegrityError, DatabaseError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field # <<< FIELD DITAMBAHKAN UNTUK MENGHINDARI ERROR
 
 # =======================================================
-# 📦 Import schemas (disesuaikan ke folder models)
+# 📦 Import schemas (Disesuaikan dan Ditambah)
 # =======================================================
 from models.schemas import (
     BaseQuestionOut,
     SubmitAnswersRequest,
     SubmitAnswersResponse,
     SessionStartResponse,
-    QuestionDetail
+    QuestionDetail,
+    # 🟢 SKEMA BARU DITAMBAHKAN
+    UserCreate,            
+    UserCreateResponse,    
+    RoleOut,               
+    LevelOut               
 )
 
 # =======================================================
-# 📦 Import core logic (disesuaikan ke folder core)
+# 📦 Import core logic (Disesuaikan dan Ditambah)
 # =======================================================
 from core.llm_service import generate_feedback, generate_followup_questions
 from core.db_connector import (
@@ -40,7 +45,11 @@ from core.db_connector import (
     insert_user_answer_main,
     insert_ml_question,
     insert_user_answer_ml,
-    check_ml_question_exists
+    check_ml_question_exists,
+    # 🟢 FUNGSI BARU DITAMBAHKAN
+    get_all_roles,       
+    get_all_levels,      
+    create_user          
 )
 
 # 💡 Definisi request untuk memulai sesi
@@ -70,9 +79,54 @@ app.add_middleware(
 )
 
 
-# =======================================================
-# 🟢 ENDPOINT: Mulai Sesi Interview
-# =======================================================
+# -------------------------------------------------------
+# 🟢 ENDPOINT BARU: User Registration & Dropdown Data
+# -------------------------------------------------------
+
+@app.get("/api/v1/roles", response_model=List[RoleOut], summary="Mendapatkan daftar semua Role (untuk Dropdown)")
+def get_roles():
+    try:
+        roles = get_all_roles()
+        return roles
+    except Exception as e:
+        print(f"Gagal mengambil Roles: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil Roles: {str(e)}")
+
+@app.get("/api/v1/levels", response_model=List[LevelOut], summary="Mendapatkan daftar semua Level (untuk Dropdown)")
+def get_levels():
+    try:
+        levels = get_all_levels()
+        return levels
+    except Exception as e:
+        print(f"Gagal mengambil Levels: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil Levels: {str(e)}")
+
+@app.post("/api/v1/register", response_model=UserCreateResponse, status_code=201, summary="Mendaftarkan User Baru")
+def register_user(user_data: UserCreate):
+    try:
+        # Pengecekan dasar ID 
+        if user_data.role_id <= 0 or user_data.level_id <= 0:
+             raise HTTPException(status_code=400, detail="ID Role atau Level tidak valid.")
+             
+        user_id = create_user(
+            name=user_data.name,
+            ref_role_id=user_data.role_id,
+            ref_level_id=user_data.level_id
+        )
+        return UserCreateResponse(user_id=user_id, name=user_data.name)
+        
+    except IntegrityError as e:
+        # Menangkap error Foreign Key jika ID Role/Level tidak ada
+        raise HTTPException(status_code=400, detail=f"Gagal mendaftarkan user. Periksa ID Role/Level. Detail: {str(e)}")
+    except Exception as e:
+        print(f"Unexpected error in /v1/register: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {e}")
+
+
+# -------------------------------------------------------
+# 🟢 ENDPOINT LAMA: Mulai Sesi Interview
+# -------------------------------------------------------
 @app.post("/api/sessions/start", response_model=SessionStartResponse)
 def start_session(payload: SessionStartRequest):
     try:
@@ -85,7 +139,8 @@ def start_session(payload: SessionStartRequest):
             )
 
         first_q = qs[0]
-        temp_session_id = f"sess_{first_q['id']}_{payload.role}_{payload.level}"
+        # Catatan: Session ID ini tidak menggunakan user_id yang baru dibuat
+        temp_session_id = f"sess_{first_q['id']}_{payload.role}_{payload.level}" 
 
         formatted_questions = [
             {"id": q['id'], "question": q['question']} for q in qs
@@ -107,9 +162,9 @@ def start_session(payload: SessionStartRequest):
         )
 
 
-# =======================================================
-# 🟢 ENDPOINT: Ambil Pertanyaan Dasar
-# =======================================================
+# -------------------------------------------------------
+# 🟢 ENDPOINT LAMA: Ambil Pertanyaan Dasar
+# -------------------------------------------------------
 @app.get("/api/v1/questions/base", response_model=List[BaseQuestionOut])
 def get_base_questions(role: str = Query(...), level: str = Query(...)):
     qs = get_base_questions_by_names(role, level, limit=2)
@@ -121,9 +176,9 @@ def get_base_questions(role: str = Query(...), level: str = Query(...)):
     return [{"id": r["id"], "question": r["question"]} for r in qs]
 
 
-# =======================================================
-# 🟢 ENDPOINT: Submit Jawaban
-# =======================================================
+# -------------------------------------------------------
+# 🟢 ENDPOINT LAMA: Submit Jawaban
+# -------------------------------------------------------
 @app.post("/api/v1/questions/answers", response_model=SubmitAnswersResponse)
 def submit_answers(payload: SubmitAnswersRequest):
     try:
@@ -145,7 +200,7 @@ def submit_answers(payload: SubmitAnswersRequest):
                 qtext = get_main_question_text_by_id(question_id)
 
             except IntegrityError as e:
-                if "1452" in str(e):
+                if "1452" in str(e): # Coba simpan sebagai jawaban ML jika FK main_question gagal
                     try:
                         insert_user_answer_ml(
                             user_id=payload.user_id,
@@ -182,7 +237,7 @@ def submit_answers(payload: SubmitAnswersRequest):
                 base_q_and_answers.append({'question': qtext, 'answer': ans.answer_text})
 
         # =======================================================
-        # 🧠 CASE A: Generate Pertanyaan Lanjutan
+        # 🧠 CASE A: Generate Pertanyaan Lanjutan (Jawaban Dasar)
         # =======================================================
         if not payload.ai_answers:
             try:
@@ -224,7 +279,7 @@ def submit_answers(payload: SubmitAnswersRequest):
             )
 
         # =======================================================
-        # 🧩 CASE B: Final Submit (AI Answers)
+        # 🧩 CASE B: Final Submit (Jawaban Lanjutan AI)
         # =======================================================
         all_q_and_a = base_q_and_answers.copy()
         for ai in payload.ai_answers:
@@ -239,6 +294,7 @@ def submit_answers(payload: SubmitAnswersRequest):
                 )
 
             if not exists:
+                # Fallback: Jika ID ml_question tidak valid, buat pertanyaan default
                 try:
                     ai.ml_question_id = insert_ml_question(
                         payload.user_id,
@@ -293,9 +349,9 @@ def submit_answers(payload: SubmitAnswersRequest):
         raise HTTPException(status_code=500, detail=f"Server error: {e}")
 
 
-# =======================================================
-# 🧾 ENDPOINT: Report Sesi Interview
-# =======================================================
+# -------------------------------------------------------
+# 🧾 ENDPOINT LAMA: Report Sesi Interview
+# -------------------------------------------------------
 @app.get("/api/sessions/{session_id}/report")
 def get_session_report(session_id: str):
     """

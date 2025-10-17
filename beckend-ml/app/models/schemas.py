@@ -1,7 +1,33 @@
 # app/models/schemas.py
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
+
+# Skema untuk mendaftarkan user baru (Request)
+class UserCreate(BaseModel):
+    name: str = Field(..., description="Nama pengguna")
+    role_id: int = Field(..., description="ID Role (ref_role_id)")
+    level_id: int = Field(..., description="ID Level (ref_level_id)")
+
+# Skema data untuk dropdown Role
+class RoleOut(BaseModel):
+    id: int
+    role_name: str
+    class Config:
+        orm_mode = True # Aktifkan ORM mode untuk SQLAlchemy
+
+# Skema data untuk dropdown Level
+class LevelOut(BaseModel):
+    id: int
+    level_name: str
+    class Config:
+        orm_mode = True # Aktifkan ORM mode untuk SQLAlchemy
+
+# Skema Response setelah user berhasil dibuat
+class UserCreateResponse(BaseModel):
+    user_id: int
+    name: str
+    message: str = "User berhasil didaftarkan."
 
 # --- Model Baru untuk Session Start Response ---
 class QuestionDetail(BaseModel):

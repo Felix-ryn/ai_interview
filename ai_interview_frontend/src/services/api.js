@@ -12,12 +12,58 @@ const api = axios.create({
 });
 
 /**
- * 1. Memulai Sesi Wawancara (POST /sessions/start)
- * @param {string} role - Posisi yang dipilih (e.g., 'Data Analyst')
- * @param {string} level - Level yang dipilih (e.g., 'Entry Level')
- * @returns {Promise<{session_id: string, base_questions: Array<Object>}>}
- * 💡 CATATAN: Backend sekarang mengembalikan base_questions (array 2 pertanyaan)
+ * Mengambil daftar Role dari backend.
+ * @returns {Promise<Array<{id: number, role_name: string}>>}
  */
+export const fetchRoles = async () => {
+  try {
+    const response = await api.get('/v1/roles');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    throw error;
+  }
+};
+
+/**
+ * Mengambil daftar Level dari backend.
+ * @returns {Promise<Array<{id: number, level_name: string}>>}
+ */
+export const fetchLevels = async () => {
+  try {
+    const response = await api.get('/v1/levels');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching levels:", error);
+    throw error;
+  }
+};
+
+/**
+ * Mendaftarkan user baru sebelum sesi wawancara.
+ * @param {string} name - Nama pengguna
+ * @param {number} roleId - ID Role (ref_role_id)
+ * @param {number} levelId - ID Level (ref_level_id)
+ * @returns {Promise<{user_id: number, name: string, message: string}>}
+ */
+export const registerUser = async (name, roleId, levelId) => {
+  try {
+    const response = await api.post('/v1/register', {
+      name,
+      role_id: roleId,
+      level_id: levelId
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error registering user:", error);
+    // Tangani pesan error dari backend
+    if (error.response && error.response.data && error.response.data.detail) {
+      throw new Error(error.response.data.detail);
+    }
+    throw error;
+  }
+};
+
 export const startInterview = async (role, level) => {
   try {
     const response = await api.post('/sessions/start', { role, level });
@@ -30,12 +76,13 @@ export const startInterview = async (role, level) => {
 
 /**
  * 2. Mengirim Jawaban (POST /v1/questions/answers)
+ * @param {number} userId - ID User yang baru terdaftar. 👈 **BARU**
  * @param {string} sessionId - Format: sess_{main_question_id}_{Role}_{Level}
  * @param {string} answerText - Jawaban yang diinput pengguna
  * @param {number} currentQuestionId - ID dari pertanyaan yang baru saja dijawab
  * @returns {Promise<Object>} - Mengandung generated_questions dan feedback
  */
-export const submitAnswer = async (sessionId, answerText, currentQuestionId) => {
+export const submitAnswer = async (userId, sessionId, answerText, currentQuestionId) => { // 👈 **MENERIMA userId**
   // 1. URAIKAN SESSION ID untuk mendapatkan ROLE dan LEVEL
   const parts = sessionId.split('_');
   // Session ID format: sess_{main_question_id}_{Role}_{Level}
@@ -44,7 +91,7 @@ export const submitAnswer = async (sessionId, answerText, currentQuestionId) => 
 
   // 2. BUAT PAYLOAD SESUAI BACKEND (SubmitAnswersRequest)
   const payload = {
-    user_id: 1, // <--- GANTI JIKA ADA LOGIKA LOGIN! Saat ini hardcode 1
+    user_id: userId, // 👈 **MENGGUNAKAN userId YANG DITERIMA**
     role: role,
     level: level,
     // Backend mengharapkan array answers. Kita kirim jawaban saat ini.
