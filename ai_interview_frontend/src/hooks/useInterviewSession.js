@@ -1,4 +1,4 @@
-// src/hooks/useInterviewSession.js 
+// src/hooks/useInterviewSession.js (Perbaikan)
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,8 @@ export const useInterviewSession = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const handleStartSession = async (role, level, userId) => {
+    // 💡 PERBAIKAN: Tambahkan roleId dan levelId di parameter
+    const handleStartSession = async (role, level, userId, roleId, levelId) => { 
         setLoading(true);
         setError(null);
 
@@ -18,9 +19,11 @@ export const useInterviewSession = () => {
             const response = await startInterview(role, level);
 
             // 2. ***KRITIS: Simpan data sesi ke Local Storage***
-            // Tambahkan userId ke data sesi
+            // Sekarang kita menyimpan roleId dan levelId!
             localStorage.setItem('interviewData', JSON.stringify({
-                userId: userId, // <<< TAMBAH USER ID
+                userId: userId, 
+                roleId: roleId,     // 🟢 Data yang hilang, sekarang ditambahkan
+                levelId: levelId,   // 🟢 Data yang hilang, sekarang ditambahkan
                 sessionId: response.session_id,
                 role: role,
                 level: level,

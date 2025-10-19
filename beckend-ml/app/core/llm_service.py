@@ -1,5 +1,7 @@
 from google import genai
 import os, json
+from app.models.feedback_schema import ScoreMetrics
+from app.models.feedback_schema import NlpGuardrails
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -83,3 +85,85 @@ def generate_feedback(role: str, level: str, q_and_a: list):
         })
 
     return feedback_list
+
+def generate_embeddings(texts: list) -> list:
+    """Menghasilkan embedding (vektor) untuk satu atau beberapa teks."""
+    # Gunakan model embedding Gemini
+    response = client.models.embed_content(
+        model="text-embedding-004", # Model embedding yang kuat
+        content=texts,
+        task_type="RETRIEVAL_DOCUMENT"
+    )
+    # response.embedding adalah list of lists, kita hanya perlu list of vectors
+    return [e.embedding for e in response.embeddings]
+
+
+async def generate_llm_score(user_answer: str, question: str) -> ScoreMetrics:
+    """
+    Menghasilkan skor matriks 5 aspek awal dari LLM.
+    LLM diprompt untuk menghasilkan JSON yang sesuai dengan ScoreMetrics.
+    """
+    prompt = f"""
+    Anda adalah penilai ahli. Evaluasi jawaban user berikut untuk pertanyaan: '{question}'.
+    Jawaban User: "{user_answer}"
+    
+    Berikan skor (0-100) untuk 5 aspek: 
+    1. relevance (Kesesuaian dengan pertanyaan)
+    2. clarity (Kejelasan penyampaian)
+    3. structure (Struktur jawaban, misal STAR)
+    4. confidence (Tingkat keyakinan)
+    5. conciseness (Keringkasan)
+    
+    Output: JSON objek murni yang memetakan aspek ke skor (integer 0-100).
+    Contoh: {{"relevance": 85, "clarity": 70, "structure": 90, "confidence": 75, "conciseness": 80}}
+    """
+    
+    # Gunakan model yang mampu JSON output
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    
+    try:
+        # Panggil fungsi pembersihan JSON jika perlu, lalu parse
+        json_text = response.text.strip()
+        parsed_data = json.loads(json_text)
+        return ScoreMetrics(**parsed_data)
+    except Exception as e:
+        print(f"Error parsing LLM Score JSON: {e}")
+        # Fallback ke skor default (misal 50) jika parsing gagal
+        return ScoreMetrics(relevance=50, clarity=50, structure=50, confidence=50, conciseness=50)
+
+async def generate_feedback_narrative(
+    llm_scores: ScoreMetrics, 
+    nlp_metrics: NlpGuardrails, 
+    final_score: float, 
+    role: str
+) -> str:
+    """
+    Menyusun feedback naratif yang kaya, menggabungkan skor subjektif dan metrik NLP objektif.
+    """
+    
+    # Gunakan metrik terstruktur sebagai konteks dalam prompt
+    context = f"""
+    Skor LLM (0-100): {llm_scores.model_dump_json()}
+    Metrik Objektif NLP: Cosine Sim. {nlp_metrics.cosine_similarity:.2f}, Filler Ratio {nlp_metrics.filler_ratio:.2f}, STAR Detected: {nlp_metrics.is_star_detected}
+    Skor Final Terkalibrasi: {final_score:.2f}/100
+    """
+
+    prompt = f"""
+    Berdasarkan konteks dan metrik penilaian berikut, susun feedback naratif profesional untuk kandidat {role}.
+    
+    1. Mulai dengan rangkuman skor final.
+    2. Sorot area kekuatan utama.
+    3. Berikan saran spesifik untuk perbaikan, fokus pada aspek yang nilainya rendah (misalnya, jika clarity rendah, sebutkan perlunya mengurangi filler words).
+    
+    Konteks:
+    {context}
+    """
+    
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    return response.text.strip()

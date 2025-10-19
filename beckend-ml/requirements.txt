@@ -3,3 +3,5 @@ uvicorn[standard]
 pydantic
 requests
 mysql-connector-python
+nltk
+scikit-learn

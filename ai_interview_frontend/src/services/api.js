@@ -75,14 +75,9 @@ export const startInterview = async (role, level) => {
 };
 
 /**
- * 2. Mengirim Jawaban (POST /v1/questions/answers)
- * @param {number} userId - ID User yang baru terdaftar. 👈 **BARU**
- * @param {string} sessionId - Format: sess_{main_question_id}_{Role}_{Level}
- * @param {string} answerText - Jawaban yang diinput pengguna
- * @param {number} currentQuestionId - ID dari pertanyaan yang baru saja dijawab
- * @returns {Promise<Object>} - Mengandung generated_questions dan feedback
+ * Mengirim Jawaban (POST /v1/questions/answers)
  */
-export const submitAnswer = async (userId, sessionId, answerText, currentQuestionId) => { // 👈 **MENERIMA userId**
+export const submitAnswer = async (userId, sessionId, answerText, currentQuestionId) => {
   // 1. URAIKAN SESSION ID untuk mendapatkan ROLE dan LEVEL
   const parts = sessionId.split('_');
   // Session ID format: sess_{main_question_id}_{Role}_{Level}
@@ -91,7 +86,7 @@ export const submitAnswer = async (userId, sessionId, answerText, currentQuestio
 
   // 2. BUAT PAYLOAD SESUAI BACKEND (SubmitAnswersRequest)
   const payload = {
-    user_id: userId, // 👈 **MENGGUNAKAN userId YANG DITERIMA**
+    user_id: userId,
     role: role,
     level: level,
     // Backend mengharapkan array answers. Kita kirim jawaban saat ini.
@@ -99,7 +94,6 @@ export const submitAnswer = async (userId, sessionId, answerText, currentQuestio
       main_question_id: currentQuestionId,
       answer_text: answerText
     }],
-    // Backend mengharapkan array ai_answers, yang kosong di tahap ini
     ai_answers: []
   };
 
@@ -116,14 +110,29 @@ export const submitAnswer = async (userId, sessionId, answerText, currentQuestio
 
 
 /**
- * 3. Mendapatkan Laporan Akhir (GET /sessions/{id}/report)
+ * BARU/MODIFIKASI: Mendapatkan Laporan Akhir (POST /v1/feedback)
+ * Mengirim data ID dan memicu evaluasi final di backend.
+ * * @param {number} userId - ID User
+ * @param {number} mainQuestionId - ID Pertanyaan Utama (sesi)
+ * @param {number} roleId - ID Role
+ * @param {number} levelId - ID Level
+ * @returns {Promise<FinalFeedback>} - Objek FinalFeedback dari backend
  */
-export const getReport = async (sessionId) => {
+export const getFinalFeedback = async (userId, mainQuestionId, roleId, levelId) => {
+  const payload = {
+    user_id: userId,
+    main_question_id: mainQuestionId,
+    role_id: roleId,
+    level_id: levelId
+  };
+
   try {
-    const response = await api.get(`/sessions/${sessionId}/report`);
+    // Memanggil endpoint /feedback yang memicu proses kalibrasi
+    const response = await api.post('/v1/feedback', payload);
     return response.data;
   } catch (error) {
-    console.error("Error fetching report:", error);
+    console.error("Error fetching final feedback:", error);
+    // Perlu penanganan error yang lebih spesifik di FeedbackPage
     throw error;
   }
 };

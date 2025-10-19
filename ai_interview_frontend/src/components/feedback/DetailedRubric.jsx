@@ -1,17 +1,37 @@
 // src/components/feedback/DetailedRubric.jsx
 import React from 'react';
 
-const DetailedRubric = ({ aspects }) => {
-  // Data dummy jika report.aspect_scores belum terisi
-  const dummyAspects = [
-    { name: 'Relevance', score: 85, metric: 'Cosine Similarity, Keyword Coverage', focus: 'Kesesuaian jawaban' },
-    { name: 'Clarity', score: 78, metric: 'Filler Ratio, Linguistic Complexity', focus: 'Kejelasan penyampaian' },
-    { name: 'Structure', score: 92, metric: 'Deteksi Pola STAR', focus: 'Keteraturan alur jawaban' },
-    { name: 'Confidence', score: 70, metric: 'Analisis hedging', focus: 'Tingkat keyakinan' },
-    { name: 'Conciseness', score: 88, metric: 'Perbandingan Word Count', focus: 'Keringkasan penyampaian' },
-  ];
-  
-  const data = aspects || dummyAspects;
+// Fungsi helper untuk mengonversi objek score_metrics ke array yang dapat dibaca
+const formatMetrics = (scoreMetrics) => {
+  if (!scoreMetrics) return [];
+
+  // Mapping kriteria teknis sesuai proposal/rubrik
+  const aspectDetails = {
+    relevance: { name: 'Relevance', focus: 'Kesesuaian & Kebenaran Teknis', metric: 'Cosine Similarity, Keyword Coverage' },
+    clarity: { name: 'Clarity', focus: 'Kejelasan Penyampaian', metric: 'Filler Ratio, Linguistic Complexity' },
+    structure: { name: 'Structure', focus: 'Keteraturan Alur (Pola STAR)', metric: 'Deteksi Pola STAR' },
+    confidence: { name: 'Confidence', focus: 'Tingkat Keyakinan (Diksi)', metric: 'Analisis leksikal/hedging' },
+    conciseness: { name: 'Conciseness', focus: 'Keringkasan Penyampaian', metric: 'Perbandingan Word Count' },
+  };
+
+  return Object.keys(scoreMetrics).map(key => {
+    const details = aspectDetails[key.toLowerCase()] || { name: key, focus: 'N/A', metric: 'N/A' };
+    return {
+      ...details,
+      score: Math.round(scoreMetrics[key]), // Ambil skor dari objek
+    };
+  });
+};
+
+const DetailedRubric = ({ scoreMetrics }) => {
+  // Gunakan fungsi helper untuk mendapatkan data yang siap ditampilkan
+  const data = formatMetrics(scoreMetrics);
+
+  if (data.length === 0) {
+    return <div className="p-6 bg-white rounded-xl shadow-lg text-center text-gray-500">
+      Data rubrik penilaian belum tersedia.
+    </div>;
+  }
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg">

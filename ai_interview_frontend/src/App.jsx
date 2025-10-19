@@ -1,4 +1,3 @@
-// src/App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import InterviewPage from './pages/InterviewPage';
@@ -9,9 +8,12 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        {/* Rute dinamis untuk sesi wawancara dan feedback */}
+        {/* Rute dinamis untuk sesi wawancara */}
         <Route path="/interview/:sessionId" element={<InterviewPage />} />
-        <Route path="/feedback/:sessionId" element={<FeedbackPage />} />
+
+        {/* 🟢 PERBAIKAN KRITIS: Hapus ":sessionId" dari rute /feedback */}
+        {/* Rute ini sekarang hanya membutuhkan path dasar '/feedback' */}
+        <Route path="/feedback" element={<FeedbackPage />} />
       </Routes>
     </Router>
   );

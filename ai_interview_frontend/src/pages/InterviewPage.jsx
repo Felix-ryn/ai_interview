@@ -1,8 +1,8 @@
 // src/pages/InterviewPage.jsx
 
-import React, { useState, useEffect, useRef } from 'react'; // Menambahkan useRef
+import React, { useState, useEffect, useRef } from 'react'; 
 import { useParams, useNavigate } from 'react-router-dom';
-import { getReport, submitAnswer } from '../services/api';
+import { submitAnswer } from '../services/api'; 
 import ProgressIndicator from '../components/common/ProgressIndicator';
 import QuestionCard from '../components/interview/QuestionCard';
 import Button from '../components/common/Button';
@@ -20,25 +20,30 @@ const InterviewPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // 💡 KRITIS: Gunakan useRef untuk menyimpan USER ID
+    // Ref sudah ada untuk menampung ID yang diperlukan
     const userIdRef = useRef(null);
-    const roleRef = useRef(""); // Simpan Role untuk judul
+    const roleRef = useRef(""); 
+    const roleIdRef = useRef(null); 
+    const levelIdRef = useRef(null); 
 
     useEffect(() => {
-        // Logika ini membaca data yang disimpan oleh useInterviewSession.js
         const interviewDataString = localStorage.getItem('interviewData');
 
         if (interviewDataString) {
             try {
                 const data = JSON.parse(interviewDataString);
 
-                // 💡 AMBIL USER ID DAN ROLE DARI LOCALSTORAGE
-                userIdRef.current = data.userId; // Simpan user ID di ref
-                roleRef.current = data.role;     // Simpan Role di ref
+                // AMBIL SEMUA ID DAN ROLE DARI LOCALSTORAGE
+                userIdRef.current = data.userId; 
+                roleRef.current = data.role;     
+                
+                // 💡 INI AKAN SUKSES SETELAH useInterviewSession.js diperbaiki
+                roleIdRef.current = data.roleId; 
+                levelIdRef.current = data.levelId; 
 
                 // Validasi data
-                if (!data.userId) {
-                    setError("Data sesi tidak lengkap (User ID hilang). Silakan mulai ulang.");
+                if (!data.userId || !data.roleId || !data.levelId) {
+                    setError("Data sesi tidak lengkap (User/Role/Level ID hilang). Silakan mulai ulang.");
                     return;
                 }
 
@@ -47,20 +52,17 @@ const InterviewPage = () => {
                 if (allQs && allQs.length >= 1) {
                     setAllBaseQuestions(allQs);
 
-                    // Inisialisasi: Tampilkan pertanyaan pertama (index 0)
                     const firstQuestion = allQs[0];
                     setCurrentQuestion(firstQuestion.question);
                     setCurrentQuestionId(firstQuestion.id);
-                    setError(null); // Hapus error jika berhasil dimuat
+                    setError(null); 
                 } else {
                     setError("Data pertanyaan dasar tidak ditemukan. Periksa konfigurasi role/level.");
                 }
             } catch (e) {
-                // Ini menangani error jika JSON.parse gagal
                 setError("Gagal memproses data sesi dari penyimpanan lokal.");
             }
         } else {
-            // Ini menangani error jika 'interviewData' belum ada di localStorage
             setError("Sesi tidak valid atau data sesi hilang. Silakan mulai wawancara baru.");
         }
     }, [sessionId]);
@@ -69,19 +71,55 @@ const InterviewPage = () => {
     const handleSubmit = async () => {
         if (!answer.trim()) return setError("Jawaban tidak boleh kosong.");
 
-        if (!currentQuestionId || !userIdRef.current) { // 💡 VALIDASI USER ID
+        if (!currentQuestionId || !userIdRef.current) { 
             setError("Kesalahan sesi: ID Pertanyaan atau User ID hilang. Coba mulai sesi lagi.");
             return;
         }
 
+        // Ambil ID dari Ref yang sudah di-load di useEffect
+        const mainQuestionId = allBaseQuestions[0]?.id;
+        const userId = userIdRef.current;
+        const roleId = roleIdRef.current;
+        const levelId = levelIdRef.current;
+
+        if (questionNumber === MAX_QUESTIONS) {
+            // KASUS 3: Sesi Selesai (Menjawab Q5)
+            setLoading(true);
+            
+            try {
+                // 1. Kirim jawaban terakhir
+                await submitAnswer(
+                    userId,
+                    sessionId,
+                    answer,
+                    currentQuestionId
+                );
+
+                // 2. Navigasi ke FeedbackPage dengan Query Params yang benar
+                if (mainQuestionId && roleId && levelId) {
+                    navigate(`/feedback?user=${userId}&mq=${mainQuestionId}&role=${roleId}&level=${levelId}`);
+                } else {
+                    // Tampilkan error yang sama jika ada ref yang null
+                    setError("Data sesi tidak lengkap untuk melihat hasil.");
+                }
+
+            } catch (err) {
+                console.error("Error submitting final answer:", err);
+                setError("Gagal mengirim jawaban terakhir. Silakan coba lagi.");
+            } finally {
+                setLoading(false);
+            }
+            return; 
+        }
+
+        // ... (Logika untuk mengirim jawaban dan melanjutkan tetap sama) ...
         setLoading(true);
         setError(null);
 
         try {
             // 1. Kirim jawaban saat ini
-            // 💡 PERUBAHAN KRITIS: Kirim userIdRef.current
             const data = await submitAnswer(
-                userIdRef.current, // 👈 KIRIM USER ID YANG BENAR
+                userId, 
                 sessionId,
                 answer,
                 currentQuestionId
@@ -89,43 +127,34 @@ const InterviewPage = () => {
 
             const nextIndex = questionNumber;
 
-            // Cek apakah ada pertanyaan berikutnya di array lokal (untuk Q2)
+            // KASUS 1 & 2: Lanjut ke pertanyaan berikutnya
             if (nextIndex < allBaseQuestions.length) {
                 // KASUS 1: Pindah dari Q1 ke Q2 (Mengambil dari array lokal DB)
-
                 const nextQ = allBaseQuestions[nextIndex];
 
                 setQuestionNumber(prev => prev + 1);
                 setCurrentQuestion(nextQ.question);
                 setCurrentQuestionId(nextQ.id);
                 setAnswer('');
-
             } else if (questionNumber < MAX_QUESTIONS) {
-                // KASUS 2: Pindah dari Q2 ke Q3 (Mengambil dari response AI)
-                // Backend merespons generated_questions (teks) dan generated_questions_ids (ID)
-
+                // KASUS 2: Pindah ke Pertanyaan AI (Q3/Q4)
                 const nextQuestionText = data.generated_questions && data.generated_questions[0];
                 const nextQuestionId = data.generated_questions_ids && data.generated_questions_ids[0];
 
-                // 💡 Fallback jika AI gagal (karena Quota 429)
                 const fallbackText = "Pertanyaan lanjutan AI gagal dimuat. Sesi dilanjutkan dengan pertanyaan fallback."
                 const questionToDisplay = nextQuestionText || fallbackText;
-                const idToUse = nextQuestionId || currentQuestionId + 1; // ID sementara jika ID AI hilang
+                const idToUse = nextQuestionId || currentQuestionId + 1; 
 
                 if (nextQuestionText || nextQuestionId) {
                     setQuestionNumber(prev => prev + 1);
                     setCurrentQuestion(questionToDisplay);
-                    setCurrentQuestionId(idToUse); // Gunakan ID yang dikembalikan AI
+                    setCurrentQuestionId(idToUse);
                     setAnswer('');
                 } else {
-                    // Jika LLM gagal memberikan pertanyaan baru, kita tunjukkan error
                     setError(fallbackText + " Silakan coba klik Kirim lagi.");
                 }
-            } else {
-                // KASUS 3: Sesi Selesai (Menjawab Q5)
-                navigate(`/feedback/${sessionId}`);
-            }
-
+            } 
+            
         } catch (err) {
             console.error("Error submitting answer:", err);
             setError("Gagal mengirim jawaban. Coba periksa koneksi atau response backend.");

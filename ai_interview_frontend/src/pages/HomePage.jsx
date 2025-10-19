@@ -1,24 +1,19 @@
 // src/pages/HomePage.jsx
 
 import React, { useState, useEffect } from 'react';
-// Pastikan useInterviewSession mengembalikan fungsi setLoading
 import { useInterviewSession } from '../hooks/useInterviewSession'; 
-// Import fungsi API yang baru
 import { registerUser, fetchRoles, fetchLevels } from '../services/api';
 import Dropdown from '../components/common/Dropdown';
 import Button from '../components/common/Button';
 
 const HomePage = () => {
     const [name, setName] = useState('');
-    // State untuk menyimpan daftar Role dan Level dari API
     const [roles, setRoles] = useState([]);
     const [levels, setLevels] = useState([]);
-    // 💡 PERBAIKAN: Set nilai awal ke null/undefined (atau -1) agar validasi berfungsi
     const [selectedRoleId, setSelectedRoleId] = useState(null); 
     const [selectedLevelId, setSelectedLevelId] = useState(null);
 
     const [isRegistering, setIsRegistering] = useState(false);
-    // 💡 PERBAIKAN: Ambil setLoading dari hook
     const { loading, setLoading, error, setError, handleStartSession } = useInterviewSession(); 
 
 
@@ -31,7 +26,6 @@ const HomePage = () => {
                 setLevels(levelsData);
 
                 // Set nilai default ke ID pertama jika ada
-                // Ini memastikan dropdown memiliki nilai awal yang valid
                 if (rolesData.length > 0) setSelectedRoleId(rolesData[0].id);
                 if (levelsData.length > 0) setSelectedLevelId(levelsData[0].id);
 
@@ -48,15 +42,13 @@ const HomePage = () => {
         e.preventDefault();
         setError(null);
 
-        // 💡 PERBAIKAN: Validasi harus menggunakan !name, !selectedRoleId, dan !selectedLevelId
-        // Tombol akan disabled jika salah satu null/undefined.
         if (!name || !selectedRoleId || !selectedLevelId) {
             alert("Mohon isi Nama, Role, dan Level dengan lengkap.");
             return;
         }
 
         setIsRegistering(true);
-        setLoading(true); // Mulai loading untuk proses keseluruhan
+        setLoading(true);
 
         try {
             // 1. DAFTARKAN USER BARU
@@ -64,7 +56,6 @@ const HomePage = () => {
             const userId = userRegistrationResponse.user_id;
 
             // Cari string nama Role dan Level yang sesuai dengan ID untuk API startInterview
-            // Gunakan `?.` untuk optional chaining agar aman dari error
             const roleName = roles.find(r => r.id === selectedRoleId)?.role_name;
             const levelName = levels.find(l => l.id === selectedLevelId)?.level_name;
 
@@ -73,23 +64,19 @@ const HomePage = () => {
             }
 
             // 2. MULAI SESI WAWANCARA
-            // Kirim user ID yang baru dibuat, nama role, dan nama level
-            handleStartSession(roleName, levelName, userId);
+            // 💡 PERBAIKAN KRITIS: Kirim selectedRoleId dan selectedLevelId ke hook
+            handleStartSession(roleName, levelName, userId, selectedRoleId, selectedLevelId);
 
         } catch (err) {
             console.error("Gagal mendaftar atau memulai sesi:", err);
-            // Tangkap response error dari backend jika ada
             const backendDetail = err.response?.data?.detail;
             setError(backendDetail || err.message || "Terjadi kesalahan saat memulai sesi.");
-            setLoading(false); // 💡 KRITIS: Hentikan loading saat error terjadi di sini
+            setLoading(false);
         } finally {
             setIsRegistering(false);
-            // Note: setLoading(false) untuk proses handleStartSession akan diurus di hook, 
-            // tetapi kita pastikan loading utama dihentikan jika error terjadi sebelum hook.
         }
     };
 
-    // 💡 PERBAIKAN: Logika disabled yang lebih ketat
     const isFormIncomplete = !name || !selectedRoleId || !selectedLevelId;
     const isProcessing = loading || isRegistering;
 
@@ -131,7 +118,6 @@ const HomePage = () => {
                         disabled={isProcessing}
                     />
 
-                    {/* 💡 KRITIS: Disabled jika form belum lengkap ATAU sedang memproses */}
                     <Button type="submit" disabled={isProcessing || isFormIncomplete}>
                         {isProcessing ? 'Memproses...' : 'Mulai Wawancara'}
                     </Button>

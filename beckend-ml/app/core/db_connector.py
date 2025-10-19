@@ -2,7 +2,8 @@ import mysql.connector
 from datetime import datetime
 # 💡 BARU: Import IntegrityError dan DatabaseError untuk penanganan rollback
 from mysql.connector.errors import IntegrityError, DatabaseError 
-
+from typing import List, Dict
+from app.models.feedback_schema import FinalFeedback
 
 # ====================================================================
 # FUNGSI BARU UNTUK REF_ROLE DAN REF_LEVEL
@@ -212,6 +213,79 @@ def check_ml_question_exists(ml_question_id: int) -> bool:
         cursor.execute("SELECT id FROM ml_question WHERE id = %s", (ml_question_id,))
         row = cursor.fetchone()
         return row is not None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_user_answers_for_session(user_id: int, main_question_id: int) -> List[Dict]:
+    """
+    Mengambil semua jawaban user terkait satu sesi (dimulai dari main_question_id).
+    Juga mengambil ground truth (question text) untuk pembanding NLP.
+    """
+    conn = _get_conn()
+    cursor = conn.cursor(dictionary=True)
+    
+    q = """
+    SELECT 
+        au.answer_text, 
+        COALESCE(mq.question, mlq.question_ml) AS question_text,
+        -- Kita asumsikan ground_truth ada di tabel lain atau harus di-generate. 
+        -- Untuk sementara, kita pakai question_text sebagai ground_truth semantik, 
+        -- atau Anda harus buat kolom 'ground_truth_answer' di main_question/ml_question.
+        COALESCE(mq.question, mlq.question_ml) AS ground_truth 
+    FROM answer_user au
+    LEFT JOIN main_question mq ON au.main_question_id = mq.id
+    LEFT JOIN ml_question mlq ON au.ml_question_id = mlq.id
+    WHERE au.user_id = %s AND (au.main_question_id = %s OR au.ml_question_id IN (
+        SELECT id FROM ml_question WHERE user_id = %s -- Menangkap semua ml_question yang relevan
+    )) 
+    ORDER BY au.created_at
+    """
+    # Catatan: Logika pengambilan data sesi di atas perlu disesuaikan dengan skema database sesi yang pasti.
+    try:
+        cursor.execute(q, (user_id, main_question_id, user_id))
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def save_feedback_results(report: FinalFeedback):
+    """
+    Menyimpan skor akhir dan naratif feedback ke dalam tabel answer_user.
+    Biasanya hanya mengupdate baris yang telah selesai diwawancarai.
+    """
+    conn = _get_conn()
+    cursor = conn.cursor()
+    
+    # Asumsi: Anda akan mengupdate baris 'answer_user' yang sesuai (mungkin yang terakhir/utama)
+    # atau membuat tabel baru 'final_report'. Kita update saja baris yang relevan.
+    q = """
+    UPDATE answer_user
+    SET 
+        score_overall = %s,
+        score_relevance = %s, 
+        score_clarity = %s, 
+        score_structure = %s, 
+        score_confidence = %s, 
+        score_conciseness = %s,
+        feedback_narrative = %s -- Asumsi: Tambahkan kolom feedback_narrative di DB
+    WHERE user_id = %s AND main_question_id = %s;
+    """
+    
+    try:
+        # Ambil data dari model Pydantic
+        scores = report.score_metrics
+        cursor.execute(q, (
+            report.score_overall, scores.relevance, scores.clarity, scores.structure,
+            scores.confidence, scores.conciseness, report.feedback_narrative,
+            report.user_id, report.main_question_id
+        ))
+        conn.commit()
+    except DatabaseError as e:
+        conn.rollback() 
+        raise e
     finally:
         cursor.close()
         conn.close()
