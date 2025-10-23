@@ -1,13 +1,21 @@
 import mysql.connector
 from datetime import datetime
-# 💡 BARU: Import IntegrityError dan DatabaseError untuk penanganan rollback
 from mysql.connector.errors import IntegrityError, DatabaseError 
-from typing import List, Dict
-from app.models.feedback_schema import FinalFeedback
+from typing import List, Dict, Any 
 
-# ====================================================================
-# FUNGSI BARU UNTUK REF_ROLE DAN REF_LEVEL
-# ====================================================================
+# === Ganti _get_conn dengan yang sesuai dengan konfigurasi Anda ===
+def _get_conn():
+    """Membuat koneksi ke database MySQL."""
+    # Pastikan kredensial ini sudah benar
+    return mysql.connector.connect(
+        user='root', 
+        password='', 
+        host='127.0.0.1', 
+        database='tm_db', 
+        port=3307, 
+        auth_plugin='mysql_native_password'
+    )
+# ===================================================================
 
 def get_all_roles():
     """Mengambil semua data role dari ref_role."""
@@ -33,10 +41,6 @@ def get_all_levels():
         cursor.close()
         conn.close()
 
-# ====================================================================
-# FUNGSI BARU UNTUK REGISTRASI USER
-# ====================================================================
-
 def create_user(name: str, ref_role_id: int, ref_level_id: int) -> int:
     """Menyimpan user baru ke tabel user dan mengembalikan ID-nya."""
     conn = _get_conn()
@@ -48,9 +52,6 @@ def create_user(name: str, ref_role_id: int, ref_level_id: int) -> int:
     """
     now = datetime.now()
     try:
-        # Periksa apakah ID role/level ada (optional, tapi baik untuk validasi)
-        # Asumsikan validasi role/level ID sudah dilakukan di API atau Pydantic.
-        
         cursor.execute(q, (name, ref_role_id, ref_level_id, now))
         conn.commit()
         last_id = cursor.lastrowid
@@ -62,30 +63,10 @@ def create_user(name: str, ref_role_id: int, ref_level_id: int) -> int:
         cursor.close()
         conn.close()
         
-# ====================================================================
-# FIX KONEKSI: Menggunakan konfigurasi Laragon 3307 yang sudah diverifikasi
-# ====================================================================
-
-def _get_conn():
-    """Membuat koneksi ke database MySQL."""
-    return mysql.connector.connect(
-        user='root', 
-        password='', 
-        host='127.0.0.1', 
-        database='tm_db', 
-        port=3307, # PORT WAJIB 3307
-        auth_plugin='mysql_native_password'
-    )
-
-
 def get_base_questions_by_names(role_name: str, level_name: str, limit: int = 2):
-    """Mengambil pertanyaan dasar berdasarkan role dan level (case-insensitive)."""
-    # Fix: Normalisasi input ke huruf kecil di Python
+    """Mengambil pertanyaan dasar berdasarkan role dan level."""
     normalized_role = role_name.lower()
     normalized_level = level_name.lower()
-    
-    # === DEBUG PRINT ===
-    print(f"DEBUG DB: Mencari Role: '{normalized_role}', Level: '{normalized_level}'")
     
     conn = _get_conn()
     cursor = conn.cursor(dictionary=True)
@@ -94,7 +75,6 @@ def get_base_questions_by_names(role_name: str, level_name: str, limit: int = 2)
     FROM main_question mq
     JOIN ref_role rr ON mq.ref_role_id = rr.id
     JOIN ref_level rl ON mq.ref_level_id = rl.id
-    -- Fix: Menggunakan fungsi MySQL LOWER() pada kolom DB untuk case-insensitive
     WHERE LOWER(rr.role_name) = %s AND LOWER(rl.level_name) = %s 
     ORDER BY mq.id
     LIMIT %s
@@ -102,14 +82,13 @@ def get_base_questions_by_names(role_name: str, level_name: str, limit: int = 2)
     try:
         cursor.execute(q, (normalized_role, normalized_level, limit))
         rows = cursor.fetchall()
-        print(f"DEBUG DB: Rows ditemukan: {len(rows)}") 
         return rows
     finally:
         cursor.close()
         conn.close()
 
 def get_main_question_text_by_id(mq_id: int):
-    """Mengambil teks pertanyaan utama (main_question) berdasarkan ID."""
+    """Mengambil teks pertanyaan utama berdasarkan ID."""
     conn = _get_conn()
     cursor = conn.cursor()
     try:
@@ -121,7 +100,7 @@ def get_main_question_text_by_id(mq_id: int):
         conn.close()
 
 def get_ml_question_text_by_id(ml_id: int):
-    """Mengambil teks pertanyaan AI (ml_question) berdasarkan ID."""
+    """Mengambil teks pertanyaan ML (follow-up) berdasarkan ID."""
     conn = _get_conn()
     cursor = conn.cursor()
     try:
@@ -134,7 +113,7 @@ def get_ml_question_text_by_id(ml_id: int):
 
 
 def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: str) -> int:
-    """Menyimpan jawaban user yang merujuk ke Pertanyaan Utama (Q1/Q2). MELAKUKAN ROLLBACK JIKA GAGAL."""
+    """Menyimpan jawaban user untuk pertanyaan utama."""
     conn = _get_conn()
     cursor = conn.cursor()
     last_id = None
@@ -152,7 +131,6 @@ def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: st
         last_id = cursor.lastrowid
         return last_id
     except (IntegrityError, DatabaseError) as e:
-        # KRITIS: Rollback harus dipanggil jika terjadi kesalahan (FK atau Timeout)
         conn.rollback() 
         raise e
     finally:
@@ -160,7 +138,7 @@ def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: st
         conn.close()
 
 def insert_ml_question(user_id: int, question_text: str) -> int:
-    """Menyimpan pertanyaan yang dihasilkan oleh AI (ML Question) dan mengembalikan ID-nya. MELAKUKAN ROLLBACK JIKA GAGAL."""
+    """Menyimpan pertanyaan ML (follow-up) baru ke tabel."""
     conn = _get_conn()
     cursor = conn.cursor()
     last_id = None
@@ -180,7 +158,7 @@ def insert_ml_question(user_id: int, question_text: str) -> int:
 
 
 def insert_user_answer_ml(user_id: int, ml_question_id: int, answer_text: str) -> int:
-    """Menyimpan jawaban user yang merujuk ke Pertanyaan AI (Q3/Q4/Q5). MELAKUKAN ROLLBACK JIKA GAGAL."""
+    """Menyimpan jawaban user untuk pertanyaan ML (follow-up)."""
     conn = _get_conn()
     cursor = conn.cursor()
     last_id = None
@@ -198,7 +176,6 @@ def insert_user_answer_ml(user_id: int, ml_question_id: int, answer_text: str) -
         last_id = cursor.lastrowid
         return last_id
     except (IntegrityError, DatabaseError) as e:
-        # KRITIS: Rollback harus dipanggil jika terjadi kesalahan (FK atau Timeout)
         conn.rollback() 
         raise e
     finally:
@@ -206,7 +183,7 @@ def insert_user_answer_ml(user_id: int, ml_question_id: int, answer_text: str) -
         conn.close()
 
 def check_ml_question_exists(ml_question_id: int) -> bool:
-    """Memeriksa apakah ID Pertanyaan AI ada di tabel ml_question."""
+    """Memeriksa apakah ID pertanyaan ML (follow-up) ada."""
     conn = _get_conn()
     cursor = conn.cursor()
     try:
@@ -216,51 +193,76 @@ def check_ml_question_exists(ml_question_id: int) -> bool:
     finally:
         cursor.close()
         conn.close()
+        
+# ====================================================================
+# FUNGSI UNTUK FINAL FEEDBACK (Disediakan user, dipertahankan)
+# ====================================================================
 
-
-def get_user_answers_for_session(user_id: int, main_question_id: int) -> List[Dict]:
+def get_user_session_details(role_id: int, level_id: int) -> Dict[str, str]:
     """
-    Mengambil semua jawaban user terkait satu sesi (dimulai dari main_question_id).
-    Juga mengambil ground truth (question text) untuk pembanding NLP.
+    Mengambil nama Role dan Level dari ID-nya.
+    """
+    conn = _get_conn()
+    cursor = conn.cursor(dictionary=True)
+    
+    query = """
+    SELECT 
+        r.role_name, 
+        l.level_name 
+    FROM ref_role r, ref_level l 
+    WHERE r.id = %s AND l.id = %s;
+    """
+    cursor.execute(query, (role_id, level_id))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if result:
+        return {'role_name': result['role_name'], 'level_name': result['level_name']}
+    else:
+        return {'role_name': 'Unknown', 'level_name': 'Unknown'}
+
+
+def get_all_answers_for_user_and_mq(user_id: int, main_question_id: int) -> List[Dict[str, str]]:
+    """
+    Mengambil semua Pertanyaan dan Jawaban untuk sesi wawancara, diurutkan berdasarkan waktu dibuat.
     """
     conn = _get_conn()
     cursor = conn.cursor(dictionary=True)
     
     q = """
     SELECT 
-        au.answer_text, 
-        COALESCE(mq.question, mlq.question_ml) AS question_text,
-        -- Kita asumsikan ground_truth ada di tabel lain atau harus di-generate. 
-        -- Untuk sementara, kita pakai question_text sebagai ground_truth semantik, 
-        -- atau Anda harus buat kolom 'ground_truth_answer' di main_question/ml_question.
-        COALESCE(mq.question, mlq.question_ml) AS ground_truth 
+        COALESCE(mq.question, mlq.question_ml) AS question, 
+        au.answer_text AS answer
     FROM answer_user au
     LEFT JOIN main_question mq ON au.main_question_id = mq.id
     LEFT JOIN ml_question mlq ON au.ml_question_id = mlq.id
-    WHERE au.user_id = %s AND (au.main_question_id = %s OR au.ml_question_id IN (
-        SELECT id FROM ml_question WHERE user_id = %s -- Menangkap semua ml_question yang relevan
-    )) 
-    ORDER BY au.created_at
+    WHERE au.user_id = %s 
+    AND (
+        au.main_question_id IS NOT NULL AND au.main_question_id >= %s OR 
+        au.ml_question_id IS NOT NULL AND mlq.user_id = %s
+    )
+    ORDER BY au.created_at ASC;
     """
-    # Catatan: Logika pengambilan data sesi di atas perlu disesuaikan dengan skema database sesi yang pasti.
     try:
         cursor.execute(q, (user_id, main_question_id, user_id))
-        return cursor.fetchall()
+        all_answers = cursor.fetchall()
+        return all_answers
     finally:
         cursor.close()
         conn.close()
 
 
-def save_feedback_results(report: FinalFeedback):
+def save_final_report_to_db(report_data: Dict[str, Any]):
     """
-    Menyimpan skor akhir dan naratif feedback ke dalam tabel answer_user.
-    Biasanya hanya mengupdate baris yang telah selesai diwawancarai.
+    Menyimpan skor akhir dan naratif feedback ke dalam tabel answer_user 
+    (baris jawaban utama pertama) untuk record sesi.
+    
+    💡 KOREKSI: Konversi skor metrik (0.0-5.0 dari LLM) ke INTEGER (TINYINT di DB).
     """
     conn = _get_conn()
     cursor = conn.cursor()
     
-    # Asumsi: Anda akan mengupdate baris 'answer_user' yang sesuai (mungkin yang terakhir/utama)
-    # atau membuat tabel baru 'final_report'. Kita update saja baris yang relevan.
     q = """
     UPDATE answer_user
     SET 
@@ -270,17 +272,37 @@ def save_feedback_results(report: FinalFeedback):
         score_structure = %s, 
         score_confidence = %s, 
         score_conciseness = %s,
-        feedback_narrative = %s -- Asumsi: Tambahkan kolom feedback_narrative di DB
-    WHERE user_id = %s AND main_question_id = %s;
+        feedback_narrative = %s 
+    WHERE user_id = %s AND main_question_id = %s
+    ORDER BY created_at ASC
+    LIMIT 1;
     """
     
     try:
-        # Ambil data dari model Pydantic
-        scores = report.score_metrics
+        # Ambil data dari Dictionary (dari LLM)
+        scores = report_data.get('score_metrics', {})
+        user_id = report_data['user_id']
+        main_question_id = report_data['main_question_id']
+        
+        # --- 💡 PERBAIKAN KRITIS: Konversi Skor Metrik (0.0-5.0) ke INT (0-5) ---
+        # Gunakan round() untuk pembulatan terdekat, lalu int() untuk casting ke integer
+        score_relevance_int = int(round(scores.get('Relevansi', 0.0)))
+        score_clarity_int = int(round(scores.get('Klaritas', 0.0)))
+        score_structure_int = int(round(scores.get('Struktur', 0.0)))
+        score_confidence_int = int(round(scores.get('Kepercayaan_Diri', 0.0)))
+        score_conciseness_int = int(round(scores.get('Ringkas', 0.0)))
+
+        # Mapping skor metrik ke kolom database yang sesuai
         cursor.execute(q, (
-            report.score_overall, scores.relevance, scores.clarity, scores.structure,
-            scores.confidence, scores.conciseness, report.feedback_narrative,
-            report.user_id, report.main_question_id
+            report_data['score_overall'], 
+            score_relevance_int,         
+            score_clarity_int,           
+            score_structure_int,         
+            score_confidence_int,        
+            score_conciseness_int,       
+            report_data['feedback_narrative'],
+            user_id, 
+            main_question_id
         ))
         conn.commit()
     except DatabaseError as e:

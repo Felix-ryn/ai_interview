@@ -1,7 +1,5 @@
-# app/models/schemas.py
-
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict # 💡 TAMBAHKAN Dict
 
 # Skema untuk mendaftarkan user baru (Request)
 class UserCreate(BaseModel):
@@ -36,10 +34,8 @@ class QuestionDetail(BaseModel):
 
 class SessionStartResponse(BaseModel):
     session_id: str
-    # Mengganti first_question: str dan first_question_id: int
     base_questions: List[QuestionDetail] # Mengirim List dari 2 pertanyaan
 # ---------------------------------------------
-
 
 class AnswerItem(BaseModel):
     main_question_id: int
@@ -71,3 +67,18 @@ class SubmitAnswersResponse(BaseModel):
 class BaseQuestionOut(BaseModel):
     id: int
     question: str
+
+# -------------------------------------------------------
+# 🟢 SKEMA BARU UNTUK FINAL FEEDBACK
+# -------------------------------------------------------
+class FinalFeedbackRequest(BaseModel):
+    user_id: int = Field(..., description="ID dari user yang mengikuti wawancara.")
+    main_question_id: int = Field(..., description="ID dari pertanyaan utama pertama (untuk identifikasi sesi).")
+    role_id: int = Field(..., description="ID Role yang dipilih.")
+    level_id: int = Field(..., description="ID Level yang dipilih.")
+
+class FinalFeedbackOut(BaseModel):
+    score_overall: float = Field(..., description="Skor total kumulatif (0-100).")
+    feedback_narrative: str = Field(..., description="Umpan balik naratif yang panjang dan komprehensif.")
+    # Gunakan Dict untuk metrics (Komunikasi, Teknis, dll.)
+    score_metrics: Dict[str, float] = Field(..., description="Metrik penilaian terperinci (e.g., {'Komunikasi': 4.5, 'Teknis': 4.8, 'Relevansi': 4.0}).")

@@ -16,7 +16,7 @@ import traceback
 
 # 💡 Import error handling untuk MySQL
 from mysql.connector.errors import IntegrityError, DatabaseError
-from pydantic import BaseModel, Field # <<< FIELD DITAMBAHKAN UNTUK MENGHINDARI ERROR
+from pydantic import BaseModel, Field 
 
 # =======================================================
 # 📦 Import schemas (Disesuaikan dan Ditambah)
@@ -28,16 +28,20 @@ from models.schemas import (
     SessionStartResponse,
     QuestionDetail,
     # 🟢 SKEMA BARU DITAMBAHKAN
-    UserCreate,            
-    UserCreateResponse,    
-    RoleOut,               
-    LevelOut               
+    UserCreate,
+    UserCreateResponse,
+    RoleOut,
+    LevelOut, 
+    # 💡 TAMBAHKAN INI UNTUK FINAL FEEDBACK
+    FinalFeedbackRequest,  
+    FinalFeedbackOut       
 )
 
 # =======================================================
 # 📦 Import core logic (Disesuaikan dan Ditambah)
 # =======================================================
-from core.llm_service import generate_feedback, generate_followup_questions
+# 💡 TAMBAHKAN generate_final_report
+from core.llm_service import generate_feedback, generate_followup_questions, generate_final_report 
 from core.db_connector import (
     get_base_questions_by_names,
     get_main_question_text_by_id,
@@ -47,9 +51,9 @@ from core.db_connector import (
     insert_user_answer_ml,
     check_ml_question_exists,
     # 🟢 FUNGSI BARU DITAMBAHKAN
-    get_all_roles,       
-    get_all_levels,      
-    create_user          
+    get_all_roles, 
+    get_all_levels, 
+    create_user
 )
 
 # 💡 Definisi request untuk memulai sesi
@@ -77,6 +81,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# -------------------------------------------------------
+# 🟢 BARU: Import dan Include Feedback Router
+# -------------------------------------------------------
+from api.feedback import router as feedback_router         # 💡 TAMBAHKAN INI
+app.include_router(feedback_router, prefix="/api")        # 💡 TAMBAHKAN INI
+# -------------------------------------------------------
 
 
 # -------------------------------------------------------
@@ -338,7 +350,7 @@ def submit_answers(payload: SubmitAnswersRequest):
             generated_questions=[],
             generated_questions_ids=[],
             feedback=feedbacks,
-            message="Berhasil simpan jawaban AI dan generate feedback."
+            message="Berhasil simpan jawaban AI dan generate feedback. Sesi wawancara selesai. Silakan panggil /api/v1/feedback untuk laporan akhir."
         )
 
     except HTTPException:
@@ -350,29 +362,20 @@ def submit_answers(payload: SubmitAnswersRequest):
 
 
 # -------------------------------------------------------
-# 🧾 ENDPOINT LAMA: Report Sesi Interview
+# 🧾 ENDPOINT LAMA: Report Sesi Interview (Ganti dengan Laporan Final)
 # -------------------------------------------------------
 @app.get("/api/sessions/{session_id}/report")
 def get_session_report(session_id: str):
     """
-    Endpoint laporan hasil sesi interview berdasarkan session_id.
-    Versi awal ini dummy agar tidak 404, bisa diganti query database nanti.
+    Endpoint laporan hasil sesi interview berdasarkan session_id. 
+    Akan digantikan oleh /api/v1/feedback di frontend.
     """
     try:
         mock_report = {
             "session_id": session_id,
-            "summary": "Sesi wawancara selesai. Berikut hasil umpan balik Anda.",
+            "summary": "Sesi wawancara selesai. Berikut hasil umpan balik Anda (MOCK DATA). Silakan gunakan endpoint /api/v1/feedback.",
             "feedback": [
-                {
-                    "question": "Apa yang kamu ketahui tentang data cleaning?",
-                    "answer": "Saya menggunakan pandas dan numpy untuk data preprocessing.",
-                    "feedback": "Jawaban bagus. Sebutkan juga metode handling missing values untuk konteks lanjutan."
-                },
-                {
-                    "question": "Bagaimana kamu menangani outlier?",
-                    "answer": "Saya gunakan IQR dan boxplot untuk mendeteksi outlier.",
-                    "feedback": "Pendekatan tepat. Jelaskan juga metode z-score."
-                }
+                # ... (Mock data) ...
             ]
         }
         return JSONResponse(content=mock_report, status_code=200)
