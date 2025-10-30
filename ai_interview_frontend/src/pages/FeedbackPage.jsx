@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useLocation } from 'react-router-dom'; // Import useLocation
-import { getFinalFeedback } from '../services/api'; // Ganti dengan getFinalFeedback
+import { useLocation } from 'react-router-dom';
+import { getFinalFeedback } from '../services/api';
 import ScoreCard from '../components/feedback/ScoreCard';
 import NarrativeFeedback from '../components/feedback/NarrativeFeedback';
 import DetailedRubric from '../components/feedback/DetailedRubric';
@@ -11,7 +11,7 @@ const useQuery = () => {
 }
 
 const FeedbackPage = () => {
-  // Kita mengambil ID yang diperlukan dari query string (misal: ?user=1&mq=1&role=5&level=3)
+  // Kita mengambil ID yang diperlukan dari query string
   const query = useQuery();
   const userId = parseInt(query.get('user'));
   const mainQuestionId = parseInt(query.get('mq'));
@@ -43,30 +43,30 @@ const FeedbackPage = () => {
       }
     };
     fetchReport();
-  }, [userId, mainQuestionId, roleId, levelId]); // Dependencies harus lengkap
+  }, [userId, mainQuestionId, roleId, levelId]);
 
-  if (loading) return <div className="p-8 text-center">Memuat Laporan dan Mengevaluasi Jawaban...</div>;
-  if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
+  if (loading) return <div className="p-8 text-center text-xl font-medium text-blue-600 min-h-screen bg-gray-50 flex items-center justify-center">Memuat Laporan dan Mengevaluasi Jawaban...</div>;
+  if (error) return <div className="p-8 text-center text-red-600 min-h-screen bg-gray-50 flex items-center justify-center">{error}</div>;
   if (!report) return <div className="p-8 text-center">Laporan tidak tersedia.</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto space-y-10">
-        <h1 className="text-4xl font-extrabold text-gray-900 text-center">Hasil Wawancaramu</h1>
+        <h1 className="text-4xl font-extrabold text-gray-900 text-center border-b pb-4">Hasil Wawancaramu</h1>
 
-        {/* Skor Total: report.score_overall (sesuai FinalFeedback Pydantic) */}
+        {/* Skor Total */}
         <ScoreCard totalScore={report.score_overall} />
 
-        {/* Feedback Naratif: report.feedback_narrative */}
+        {/* Feedback Naratif */}
         <NarrativeFeedback feedbackText={report.feedback_narrative} />
 
-        {/* Rubrik Penilaian Detil: report.score_metrics */}
-        {/* Kita konversi objek score_metrics menjadi array yang dapat di-map */}
+        {/* Rubrik Penilaian Detil */}
         <DetailedRubric scoreMetrics={report.score_metrics} />
 
         {/* Tombol kembali ke home atau lihat riwayat */}
         <div className="text-center pt-5">
-          <a href="/" className="text-blue-600 hover:text-blue-800 font-medium">
+          <a href="/" className="text-blue-600 hover:text-blue-800 font-medium text-lg flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
             Kembali ke Halaman Utama
           </a>
         </div>

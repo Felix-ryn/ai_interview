@@ -139,7 +139,7 @@ def register_user(user_data: UserCreate):
 # -------------------------------------------------------
 # 🟢 ENDPOINT LAMA: Mulai Sesi Interview
 # -------------------------------------------------------
-@app.post("/api/sessions/start", response_model=SessionStartResponse)
+@app.post("/api/v1/sessions/start", response_model=SessionStartResponse)
 def start_session(payload: SessionStartRequest):
     try:
         qs = get_base_questions_by_names(payload.role, payload.level, limit=2)

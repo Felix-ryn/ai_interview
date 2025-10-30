@@ -1,32 +1,31 @@
-// src/hooks/useInterviewSession.js (Perbaikan)
+// src/hooks/useInterviewSession.js
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { startInterview } from '../services/api';
+import { startInterview } from '../services/api'; 
 
 export const useInterviewSession = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // 💡 PERBAIKAN: Tambahkan roleId dan levelId di parameter
-    const handleStartSession = async (role, level, userId, roleId, levelId) => { 
+    // Sekarang menerima roleName dan levelName
+    const handleStartSession = async (roleName, levelName, userId, roleId, levelId) => { 
         setLoading(true);
         setError(null);
 
         try {
-            // 1. Panggil API startInterview 
-            const response = await startInterview(role, level);
+            // 1. Panggil API startInterview dengan NAMA role dan level
+            const response = await startInterview(roleName, levelName);
 
-            // 2. ***KRITIS: Simpan data sesi ke Local Storage***
-            // Sekarang kita menyimpan roleId dan levelId!
+            // 2. Simpan SEMUA data sesi (ID dan NAMA) ke Local Storage
             localStorage.setItem('interviewData', JSON.stringify({
                 userId: userId, 
-                roleId: roleId,     // 🟢 Data yang hilang, sekarang ditambahkan
-                levelId: levelId,   // 🟢 Data yang hilang, sekarang ditambahkan
+                roleId: roleId, 
+                levelId: levelId, 
                 sessionId: response.session_id,
-                role: role,
-                level: level,
+                roleName: roleName, // NAMA ROLE
+                levelName: levelName, // NAMA LEVEL
                 base_questions: response.base_questions
             }));
 
@@ -35,7 +34,7 @@ export const useInterviewSession = () => {
 
         } catch (err) {
             console.error("Error starting session:", err);
-            const errorMessage = err.response?.data?.detail || "Gagal memulai sesi. Coba periksa koneksi backend.";
+            const errorMessage = err.message || "Gagal memulai sesi. Coba periksa koneksi backend.";
             setError(errorMessage);
             setLoading(false);
         }

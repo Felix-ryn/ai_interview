@@ -16,10 +16,40 @@ if not API_KEY:
 
 client = genai.Client(api_key=API_KEY)
 
+
+# ======================================================================
+# 💡 PERUBAHAN BARU: DEFINISI RUBRIK PENILAIAN STATIS
+# Rubrik ini menyediakan deskripsi untuk kolom "Fokus Utama" dan "Metrik Teknis" 
+# yang sebelumnya terisi N/A di frontend.
+# ======================================================================
+
+RUBRIC_CRITERIA = {
+    "Relevansi": {
+        "fokus_utama": "Kesesuaian jawaban kandidat terhadap inti dan konteks pertanyaan, khususnya persyaratan senioritas.",
+        "metrik_teknis": "Mapping konsep teknis (MLOps, Interpretasi Model, Arsitektur Data) ke domain masalah yang spesifik; Hindari jawaban terlalu umum."
+    },
+    "Klaritas": {
+        "fokus_utama": "Kejelasan artikulasi ide, alur pikir, dan penggunaan diksi yang profesional.",
+        "metrik_teknis": "Penggunaan terminologi Data Science/ML yang tepat dan konsisten (misalnya, perbedaan antara Bias/Variance, Precision/Recall); Jawaban mudah dipahami."
+    },
+    "Struktur": {
+        "fokus_utama": "Organisasi jawaban yang logis, mudah diikuti, dan komprehensif (misalnya, menggunakan pola STAR atau Pendekatan-Solusi-Hasil).",
+        "metrik_teknis": "Pemisahan masalah, solusi, implementasi, dan hasil (jika relevan); Alur yang koheren untuk studi kasus teknis."
+    },
+    "Kepercayaan_Diri": {
+        "fokus_utama": "Tingkat keyakinan dalam menyampaikan jawaban dan kemampuan mempertahankan argumen teknis.",
+        "metrik_teknis": "Nada suara yang tegas dan bahasa non-verbal yang mendukung; Kepercayaan diri harus didukung oleh substansi teknis yang kuat."
+    },
+    "Ringkas": {
+        "fokus_utama": "Efisiensi dan ketepatan dalam durasi jawaban; Menyampaikan inti tanpa bertele-tele dan fokus pada poin krusial.",
+        "metrik_teknis": "Keseimbangan antara detail teknis yang cukup dan penyampaian yang singkat; Tidak mengulang poin atau mengalihkan pembicaraan."
+    }
+}
+
+
 # ======================================================================
 # 🟢 FUNGSI KOREKSI: GENERATE FINAL REPORT
-# Tone diubah menjadi "konstruktif" dan metrik skor (0-5) diubah menjadi INTEGER 
-# untuk memastikan kompatibilitas dengan kolom TINYINT di DB.
+# Diperbarui untuk mengintegrasikan skor LLM dengan RUBRIC_CRITERIA.
 # ======================================================================
 
 def generate_final_report(
@@ -84,13 +114,18 @@ def generate_final_report(
     """
 
     # Struktur Fallback Data (untuk kasus error API atau parsing)
+    # Diperbarui untuk menyertakan detailed_metrics_list yang kosong atau default
     fallback_data = {
         "score_overall": 50.0,
         "feedback_narrative": "Laporan akhir gagal dihasilkan karena masalah koneksi AI atau format data.",
-        # Menggunakan integer 3 sebagai fallback untuk skor 0-5
         "score_metrics": {
             "Relevansi": 3, "Klaritas": 3, "Struktur": 3, "Kepercayaan_Diri": 3, "Ringkas": 3
         },
+        # Fallback list untuk Matriks Penilaian Terperinci
+        "detailed_metrics_list": [
+            {"Aspek": k, "Fokus_Utama": v['fokus_utama'], "Metrik_Evaluasi_Teknis": v['metrik_teknis'], "Skor": 3} 
+            for k, v in RUBRIC_CRITERIA.items()
+        ],
         "user_id": user_id, 
         "main_question_id": main_question_id 
     }
@@ -115,13 +150,39 @@ def generate_final_report(
         narrative_text = text[narrative_start:narrative_end].strip()
         
         parsed_scores = json.loads(json_text)
+        
+        # 4. Membangun List Metrik Terperinci (Gabungan Skor LLM + Rubrik Statis)
+        detailed_metrics_list = []
+        # Gunakan skor dari LLM (parsed_scores) untuk mengisi Rubrik
+        for metric_name, criteria in RUBRIC_CRITERIA.items():
+            # Menggunakan .get() dan memastikan skor adalah integer 0-5
+            score = parsed_scores.get(metric_name)
+            if isinstance(score, (int, float)):
+                 score_int = int(round(score)) if isinstance(score, float) else score
+                 # Memastikan skor berada dalam rentang 0-5
+                 score_int = max(0, min(5, score_int)) 
+            else:
+                 score_int = 0 # Default jika LLM gagal memberikan skor untuk aspek ini
 
-        # 4. Membangun Struktur Output Final
+            detailed_metrics_list.append({
+                "Aspek": metric_name,
+                "Fokus_Utama": criteria['fokus_utama'],
+                "Metrik_Evaluasi_Teknis": criteria['metrik_teknis'],
+                "Skor": score_int # Menggunakan skor dinamis
+            })
+
+        # 5. Membangun Struktur Output Final
+        # Menggunakan .get() untuk keamanan jika 'score_overall' hilang
+        score_overall = parsed_scores.get("score_overall", 0.0) 
+        
+        # Pisahkan metrik 5 aspek dari dictionary parsed_scores
+        score_metrics_data = {k: v for k, v in parsed_scores.items() if k != 'score_overall'}
+
         report_data = {
-            # pop digunakan untuk memisahkan score_overall dari metrik 5 aspek
-            "score_overall": parsed_scores.pop("score_overall"), 
+            "score_overall": score_overall, 
             "feedback_narrative": narrative_text,
-            "score_metrics": parsed_scores, # Hanya berisi 5 metrik detil (Relevansi, dll.)
+            "score_metrics": score_metrics_data, # Hanya berisi 5 metrik detil (Relevansi, dll.)
+            "detailed_metrics_list": detailed_metrics_list, # <<< DATA BARU UNTUK FRONTEND
             "user_id": user_id, 
             "main_question_id": main_question_id 
         }
@@ -141,6 +202,7 @@ def generate_final_report(
 
 # ======================================================================
 # FUNGSI-FUNGSI LLM LAIN
+# (Tetap sama seperti yang Anda berikan, hanya disalin untuk kelengkapan file)
 # ======================================================================
 
 def generate_followup_questions(role: str, level: str, base_q_and_answers: list, desired_count: int = 3):

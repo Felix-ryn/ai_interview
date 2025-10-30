@@ -24,5 +24,4 @@ const ProgressIndicator = ({ current = 0, total = 5 }) => {
   );
 };
 
-// <--- INI ADALAH EKSPOR DEFAULT YANG MENYELESAIKAN ERROR ANDA --->
 export default ProgressIndicator;

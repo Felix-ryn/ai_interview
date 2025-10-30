@@ -53,10 +53,10 @@ export const registerUser = async (name, roleId, levelId) => {
       role_id: roleId,
       level_id: levelId
     });
+    // Pastikan response.data memiliki user_id
     return response.data;
   } catch (error) {
     console.error("Error registering user:", error);
-    // Tangani pesan error dari backend
     if (error.response && error.response.data && error.response.data.detail) {
       throw new Error(error.response.data.detail);
     }
@@ -64,9 +64,17 @@ export const registerUser = async (name, roleId, levelId) => {
   }
 };
 
+/**
+ * Memulai sesi wawancara.
+ * @param {string} role - Nama Role
+ * @param {string} level - Nama Level
+ * @returns {Promise<{session_id: string, base_questions: Array<Object>}>}
+ */
 export const startInterview = async (role, level) => {
   try {
-    const response = await api.post('/sessions/start', { role, level });
+    // Endpoint lama: /sessions/start
+    // Endpoint baru: /v1/sessions/start (disesuaikan dengan skema v1 Anda)
+    const response = await api.post('/v1/sessions/start', { role, level });
     return response.data;
   } catch (error) {
     console.error("Error starting interview:", error);
@@ -76,29 +84,27 @@ export const startInterview = async (role, level) => {
 
 /**
  * Mengirim Jawaban (POST /v1/questions/answers)
+ * @param {number} userId - ID User
+ * @param {string} roleName - Nama Role
+ * @param {string} levelName - Nama Level
+ * @param {string} answerText - Teks jawaban
+ * @param {number} currentQuestionId - ID pertanyaan yang sedang dijawab
+ * @returns {Promise<Object>} - Respons dari backend
  */
-export const submitAnswer = async (userId, sessionId, answerText, currentQuestionId) => {
-  // 1. URAIKAN SESSION ID untuk mendapatkan ROLE dan LEVEL
-  const parts = sessionId.split('_');
-  // Session ID format: sess_{main_question_id}_{Role}_{Level}
-  const role = parts[2].replace(/%20/g, ' ');
-  const level = parts[3].replace(/%20/g, ' ');
-
-  // 2. BUAT PAYLOAD SESUAI BACKEND (SubmitAnswersRequest)
+export const submitAnswer = async (userId, roleName, levelName, answerText, currentQuestionId) => {
+  // Perbaikan: Ambil roleName dan levelName sebagai parameter langsung dari hook/page.
   const payload = {
     user_id: userId,
-    role: role,
-    level: level,
-    // Backend mengharapkan array answers. Kita kirim jawaban saat ini.
+    role: roleName, // Dikirim langsung
+    level: levelName, // Dikirim langsung
     answers: [{
-      main_question_id: currentQuestionId,
+      main_question_id: currentQuestionId, // ID Pertanyaan saat ini
       answer_text: answerText
     }],
     ai_answers: []
   };
 
   try {
-    // Endpoint yang benar untuk submit jawaban dan generate pertanyaan/feedback
     const response = await api.post('/v1/questions/answers', payload);
 
     return response.data;
@@ -110,9 +116,8 @@ export const submitAnswer = async (userId, sessionId, answerText, currentQuestio
 
 
 /**
- * BARU/MODIFIKASI: Mendapatkan Laporan Akhir (POST /v1/feedback)
- * Mengirim data ID dan memicu evaluasi final di backend.
- * * @param {number} userId - ID User
+ * Mendapatkan Laporan Akhir (POST /v1/feedback)
+ * @param {number} userId - ID User
  * @param {number} mainQuestionId - ID Pertanyaan Utama (sesi)
  * @param {number} roleId - ID Role
  * @param {number} levelId - ID Level
@@ -127,12 +132,10 @@ export const getFinalFeedback = async (userId, mainQuestionId, roleId, levelId) 
   };
 
   try {
-    // Memanggil endpoint /feedback yang memicu proses kalibrasi
     const response = await api.post('/v1/feedback', payload);
     return response.data;
   } catch (error) {
     console.error("Error fetching final feedback:", error);
-    // Perlu penanganan error yang lebih spesifik di FeedbackPage
     throw error;
   }
 };
