@@ -1,2 +1,26 @@
+# ===== Node =====
 node_modules
 .env
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ===== Virtual Environments =====
+.venv/
+venv/
+env/
+
+# ===== IDE / Editor =====
+.vscode/
+.vs/
+.idea/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log

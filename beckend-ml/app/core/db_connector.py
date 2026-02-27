@@ -111,6 +111,22 @@ def get_ml_question_text_by_id(ml_id: int):
         cursor.close()
         conn.close()
 
+def get_all_ml_questions_for_user(user_id: int) -> List[Dict[str, Any]]:
+    """
+    Mengambil semua ML questions yang pernah dibuat untuk user tertentu.
+    Mengembalikan list of dict: [{'id':..., 'question_ml':...}, ...]
+    """
+    conn = _get_conn()
+    cursor = conn.cursor(dictionary=True)
+    # ORDER BY id ASC supaya pertanyaan pertama yang dibuat tetap di depan
+    q = "SELECT id, question_ml FROM ml_question WHERE user_id = %s ORDER BY id ASC"
+    try:
+        cursor.execute(q, (user_id,))
+        rows = cursor.fetchall()
+        return rows
+    finally:
+        cursor.close()
+        conn.close()
 
 def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: str) -> int:
     """Menyimpan jawaban user untuk pertanyaan utama."""
@@ -138,19 +154,38 @@ def insert_user_answer_main(user_id: int, main_question_id: int, answer_text: st
         conn.close()
 
 def insert_ml_question(user_id: int, question_text: str) -> int:
-    """Menyimpan pertanyaan ML (follow-up) baru ke tabel."""
+    """
+    Menyimpan pertanyaan ML (follow-up) baru ke tabel.
+    Sebelum insert, lakukan cek apakah teks pertanyaan serupa sudah ada untuk user ini.
+    Jika sudah ada, kembalikan id yang ada (hindari duplicate).
+    """
     conn = _get_conn()
-    cursor = conn.cursor()
-    last_id = None
-    query = "INSERT INTO ml_question (user_id, question_ml, created_at) VALUES (%s, %s, %s)"
+    cursor = conn.cursor(dictionary=True)
     now = datetime.now()
+
+    # Normalisasi teks sederhana untuk pencarian exact match
+    q_text_normalized = " ".join(str(question_text).strip().split())
+
     try:
-        cursor.execute(query, (user_id, question_text, now))
+        # 1) cek apakah sudah ada pertanyaan yang *tepat sama* untuk user ini
+        cursor.execute(
+            "SELECT id FROM ml_question WHERE user_id = %s AND REPLACE(TRIM(question_ml), '\t', ' ') = %s LIMIT 1",
+            (user_id, q_text_normalized)
+        )
+        row = cursor.fetchone()
+        if row:
+            # sudah ada, kembalikan id existing
+            return row["id"]
+
+        # 2) jika belum ada, lakukan insert
+        insert_q = "INSERT INTO ml_question (user_id, question_ml, created_at) VALUES (%s, %s, %s)"
+        cursor.execute(insert_q, (user_id, question_text, now))
         conn.commit()
         last_id = cursor.lastrowid
         return last_id
+
     except DatabaseError as e:
-        conn.rollback() 
+        conn.rollback()
         raise e
     finally:
         cursor.close()

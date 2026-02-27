@@ -32,16 +32,16 @@ from models.schemas import (
     UserCreateResponse,
     RoleOut,
     LevelOut, 
-    # 💡 TAMBAHKAN INI UNTUK FINAL FEEDBACK
-    FinalFeedbackRequest,  
-    FinalFeedbackOut       
+    # 💡 SKEMA FINAL FEEDBACK DARI models/schemas.py
+    FinalFeedbackRequest,   
+    FinalFeedbackOut        
 )
 
 # =======================================================
 # 📦 Import core logic (Disesuaikan dan Ditambah)
 # =======================================================
-# 💡 TAMBAHKAN generate_final_report
-from core.llm_service import generate_feedback, generate_followup_questions, generate_final_report 
+# generate_final_report DIHAPUS karena kini dipanggil di api/feedback.py
+from core.llm_service import generate_feedback, generate_followup_questions
 from core.db_connector import (
     get_base_questions_by_names,
     get_main_question_text_by_id,
@@ -86,8 +86,8 @@ app.add_middleware(
 # -------------------------------------------------------
 # 🟢 BARU: Import dan Include Feedback Router
 # -------------------------------------------------------
-from api.feedback import router as feedback_router         # 💡 TAMBAHKAN INI
-app.include_router(feedback_router, prefix="/api")        # 💡 TAMBAHKAN INI
+from api.feedback import router as feedback_router      
+app.include_router(feedback_router, prefix="/api")      
 # -------------------------------------------------------
 
 
@@ -118,8 +118,8 @@ def register_user(user_data: UserCreate):
     try:
         # Pengecekan dasar ID 
         if user_data.role_id <= 0 or user_data.level_id <= 0:
-             raise HTTPException(status_code=400, detail="ID Role atau Level tidak valid.")
-             
+            raise HTTPException(status_code=400, detail="ID Role atau Level tidak valid.")
+            
         user_id = create_user(
             name=user_data.name,
             ref_role_id=user_data.role_id,
@@ -212,8 +212,10 @@ def submit_answers(payload: SubmitAnswersRequest):
                 qtext = get_main_question_text_by_id(question_id)
 
             except IntegrityError as e:
-                if "1452" in str(e): # Coba simpan sebagai jawaban ML jika FK main_question gagal
+                # Menangkap error Foreign Key jika ID main_question gagal
+                if "1452" in str(e): 
                     try:
+                        # Coba simpan sebagai jawaban ML
                         insert_user_answer_ml(
                             user_id=payload.user_id,
                             ml_question_id=question_id,
@@ -335,11 +337,14 @@ def submit_answers(payload: SubmitAnswersRequest):
                 )
 
             all_q_and_a.append({
-                "question": f"Pertanyaan AI ID {ai.ml_question_id}",
+                # Menggunakan teks pertanyaan asli dari database lebih baik, tapi karena kode asli menggunakan ID, kita pertahankan format ini sebagai placeholder jika tidak ada teks yang diambil.
+                "question": f"Pertanyaan AI ID {ai.ml_question_id}", 
                 "answer": ai.answer_text
             })
 
+            
         try:
+            # Generate feedback untuk semua Q&A (opsional, bisa dipindah ke /feedback)
             feedbacks = generate_feedback(payload.role, payload.level, all_q_and_a)
         except Exception as e:
             print("generate_feedback (final) failed:", e)
@@ -362,7 +367,7 @@ def submit_answers(payload: SubmitAnswersRequest):
 
 
 # -------------------------------------------------------
-# 🧾 ENDPOINT LAMA: Report Sesi Interview (Ganti dengan Laporan Final)
+# 🧾 ENDPOINT LAMA: Report Sesi Interview (Dipertahankan sebagai mock)
 # -------------------------------------------------------
 @app.get("/api/sessions/{session_id}/report")
 def get_session_report(session_id: str):

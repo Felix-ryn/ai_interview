@@ -2,9 +2,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# ===============================
-# Ganti sesuai database MySQL di Laragon
-# ===============================
+
 DB_USER = "root"       # username MySQL
 DB_PASSWORD = ""       # password MySQL (kosong biasanya default Laragon)
 DB_HOST = "127.0.0.1"
